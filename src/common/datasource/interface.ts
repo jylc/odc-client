@@ -111,7 +111,7 @@ export interface IDataSourceModeConfig {
   priority?: number;
   connection: {
     address: {
-      items: ('ip' | 'port' | 'cluster' | 'tenant' | 'sid')[];
+      items: ('ip' | 'port' | 'cluster' | 'tenant' | 'sid' | 'databaseName')[];
     };
     account: boolean;
     role?: boolean;
