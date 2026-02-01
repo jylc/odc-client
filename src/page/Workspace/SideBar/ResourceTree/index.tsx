@@ -271,6 +271,8 @@ const ResourceTree: React.FC<IProps> = function ({
       case DatabaseGroup.dataSource: {
         return databases.map((groupItem) => {
           const groupKey = getGroupKey(groupItem.mapId, groupMode);
+          /*console.log('groupKey: ',groupKey);
+          console.log('groupItem: ',groupItem);*/
           let data, icon;
           if (groupMode === DatabaseGroup.dataSource) {
             data = datasourceList.find((d) => d.id === groupItem.mapId);

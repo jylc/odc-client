@@ -122,6 +122,7 @@ export default function WorkspaceStore({ children }) {
     if (!login?.isPrivateSpace()) {
       list = data?.contents?.filter((item) => !!item?.authorizedPermissionTypes?.length) || [];
     }
+    console.log('databaseList: ', list);
     setDatabaseList(list);
     return list;
   }, [login?.isPrivateSpace()]);
@@ -131,6 +132,7 @@ export default function WorkspaceStore({ children }) {
       const databaseList = await reloadDatabaseList();
       const arr = [DBObjectSyncStatus.SYNCING, DBObjectSyncStatus.PENDING];
       if (!databaseList?.find((item) => arr?.includes(item.objectSyncStatus))) {
+        console.log('cancel pollingDatabase');
         cancel();
       }
     },

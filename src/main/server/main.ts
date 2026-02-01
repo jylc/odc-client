@@ -94,12 +94,14 @@ class MainServer {
         break;
       }
     }
+    const psqlPath = path.join(basePath, 'libraries', 'psql', 'psql.exe');
 
     // 获取其他库路径
     const othersPath = path.join(basePath, 'libraries', 'others');
 
     log.info('resourcesPath: ', process.resourcesPath);
     log.info('obPath: ', obClientPath);
+    log.info('psqlPath: ', psqlPath);
     log.info('others Path: ', othersPath);
     log.info('jarPath: ', odcJarPath);
     log.info('pluginPath: ', pluginPath);
@@ -110,6 +112,7 @@ class MainServer {
       pluginPath,
       starterPath,
       obClientPath,
+      psqlPath,
       othersPath,
     };
   }
@@ -257,6 +260,7 @@ class MainServer {
       // 任务文件上传参数，后续任务会统一到这个目录下
       'file.storage.dir': path.join(app.getPath('userData'), 'data'),
       'obclient.file.path': paths.obClientPath,
+      'psql.file.path': paths.psqlPath,
       'libraries.others.file.path': paths.othersPath,
     };
     if (JAVA_HOME) {
@@ -325,7 +329,7 @@ class MainServer {
     ${Object.keys(process.env).join('\n')}
     `);
     log.info(`
-      runJavaProcess 
+      runJavaProcess
       jar: ${this.jarPath}
       cwd: ${app.getPath('userData')}
       env: ${JSON.stringify(env, null, 4)}

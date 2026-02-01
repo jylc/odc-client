@@ -84,6 +84,7 @@
     "@sentry/react": "^7.88.0",
     "@testing-library/react": "^11.2.2",
     "@types/antlr4": "~4.7.2",
+    "@types/archiver": "^7.0.0",
     "@types/cheerio": "^0.22.31",
     "@types/jest": "^22.2.2",
     "@types/lodash": "^4.14.168",
