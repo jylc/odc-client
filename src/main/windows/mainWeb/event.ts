@@ -37,27 +37,9 @@ export function downloadEvent(mainWindow: BrowserWindow) {
 }
 
 export function newWindowEvent(mainWindow: BrowserWindow) {
-  mainWindow.webContents.setWindowOpenHandler((detail) => {
-    let newWindow: BrowserWindow;
-    newWindow = new BrowserWindow({
-      ...mainWebWindowConfig,
-      width: mainWebWindowConfig.width,
-      height: mainWebWindowConfig.height,
-    });
-    newWindowEvent(newWindow);
-    downloadEvent(newWindow);
-    if (process.platform !== 'darwin') {
-      newWindow.setMenu(null);
-    }
-    newWindow.loadURL(detail.url);
-    newWindow.show();
-    if (process.env.ODC_DEBUG_MODE === 'open') {
-      newWindow!.webContents.openDevTools();
-    }
-    return {
-      action: 'deny',
-    };
-  });
+  // Note: This is now handled by the tab system in tabs/events.ts
+  // The setWindowOpenHandler is managed by setupTabEvents
+  // This function is kept for backward compatibility
   mainWindow.addListener('unresponsive', (e) => {
     log.error(`webcontent unresponsive, url: ${mainWindow.webContents.getURL()}`);
     log.error(e);

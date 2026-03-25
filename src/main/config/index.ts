@@ -32,6 +32,8 @@ export const mainWebWindowConfig: BrowserWindowConstructorOptions = {
   width: defaultMainWebWidth,
   center: true,
   show: false,
+  frame: false, // 隐藏原生标题栏，使用自定义标签栏
+  titleBarStyle: 'hidden', // 隐藏标题栏，macOS 兼容
   webPreferences: {
     preload: path.join(
       process.env.NODE_ENV === 'development' ? process.cwd() : process.resourcesPath || '',

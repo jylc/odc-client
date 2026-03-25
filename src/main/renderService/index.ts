@@ -24,6 +24,7 @@ import { default as clientLog } from '../utils/log';
 import feedbackImpl from './feedback';
 import { changePwd, checkProcessKey as _checkProcessKey, checkPwd, resetPwdAndDB } from './lock';
 import { getSettingPath, getUserSettingPath } from '../utils';
+import { registerTabHandlers, registerWindowHandlers } from '../ipc';
 
 export function initRenderService() {
   ipcMain.handle('getMainServerPort', (e, ...args) => {
@@ -109,4 +110,14 @@ export function initRenderService() {
      */
     return fs.readFileSync(defaultSetting).toString();
   });
+
+  /**
+   * 注册Tab相关的IPC处理器
+   */
+  registerTabHandlers();
+
+  /**
+   * 注册窗口控制相关的IPC处理器
+   */
+  registerWindowHandlers();
 }

@@ -27,6 +27,8 @@ import { getParamsFromODCSchema, getSetting, isODCSchemaUrl } from './utils';
 import log from './utils/log';
 import { openMainWebWindow } from './windows/mainWeb';
 import startScreen from './windows/startScreen';
+import { TabManager } from './tabs';
+import { setupTabEvents } from './tabs/events';
 
 Sentry.init({
   dsn: 'https://859452cf23044aeda8677a8bdcc53081@obc-sentry.oceanbase.com/3',
@@ -129,10 +131,18 @@ async function initApp() {
     log.info('create new main web');
     let mainWindow = startScreen();
     let mainServer = MainServer.getInstance();
-    await mainServer.startServer();
+    //await mainServer.startServer();
     log.info('create new main web(server start success)');
     mainWindow = openMainWebWindow(mainWindow);
     log.info('create new main web(window opened)');
+
+    /**
+     * 初始化Tab管理器
+     */
+    const tabManager = TabManager.getInstance();
+    tabManager.initialize(mainWindow);
+    setupTabEvents(mainWindow);
+    log.info('create new main web(tab manager initialized)');
   }
 
   /**

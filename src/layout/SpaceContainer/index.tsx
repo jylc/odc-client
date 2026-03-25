@@ -24,6 +24,8 @@ import { Alert } from 'antd';
 import md5 from 'blueimp-md5';
 import setting from '@/store/setting';
 import { renderMd } from './helper';
+import { isClient } from '@/util/env';
+import { TabBarContainer } from '@/component/TabBarContainer';
 
 const BannerClosedKey = 'ODC_BannerCloseKey';
 interface ISpaceContainerProps {
@@ -80,6 +82,8 @@ const SpaceContainer: React.FC<ISpaceContainerProps> = (props) => {
           />
         </div>
       )}
+      {/* TabBar for Electron client */}
+      {isClient() && <TabBarContainer />}
       <div className={styles.mainBox}>
         <Sider />
         <div className={styles.main}>

@@ -30,3 +30,4 @@ config/config.odcPlugin.js
 yarn-error.log
 # yarn.lock
 pnpm-lock.yaml
+*.log

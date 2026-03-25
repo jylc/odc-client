@@ -1,0 +1,80 @@
+/**
+ * Tab types for tab_service - matches main process types
+ */
+
+export interface TabInfo {
+  id: string;
+  url: string;
+  title: string;
+  favicon?: string;
+  isActive: boolean;
+  isLoading: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+}
+
+export interface TabOptions {
+  id?: string;
+  url: string;
+  title?: string;
+  favicon?: string;
+  isActive?: boolean;
+}
+
+export interface TabBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export const TAB_EVENTS = {
+  TAB_CREATED: 'tab:created',
+  TAB_UPDATED: 'tab:updated',
+  TAB_ACTIVATED: 'tab:activated',
+  TAB_CLOSED: 'tab:closed',
+  TAB_LOADING: 'tab:loading',
+  TAB_LOADED: 'tab:loaded',
+  TAB_TITLE_UPDATED: 'tab:title-updated',
+  TAB_FAVICON_UPDATED: 'tab:favicon-updated',
+} as const;
+
+/**
+ * Electron tab API interface (exposed via preload.js)
+ */
+export interface ElectronTabAPI {
+  create: (url: string, options?: Partial<TabOptions>) => Promise<TabInfo>;
+  switch: (tabId: string) => Promise<{ success: boolean }>;
+  close: (tabId: string) => Promise<{ success: boolean }>;
+  getAll: () => Promise<TabInfo[]>;
+  getActive: () => Promise<TabInfo | null>;
+  updateBounds: (bounds: TabBounds) => Promise<{ success: boolean }>;
+  setBarHeight: (height: number) => Promise<{ success: boolean }>;
+  goBack: () => Promise<{ success: boolean }>;
+  goForward: () => Promise<{ success: boolean }>;
+  reload: () => Promise<{ success: boolean }>;
+  stop: () => Promise<{ success: boolean }>;
+  on: (event: string, callback: (data: any) => void) => () => void;
+  off: (event: string, callback?: (data: any) => void) => void;
+  once: (event: string, callback: (data: any) => void) => void;
+}
+
+/**
+ * Window control API interface (exposed via preload.js)
+ */
+export interface ElectronWindowControlAPI {
+  minimize: () => Promise<{ success: boolean }>;
+  maximize: () => Promise<{ success: boolean }>;
+  unmaximize: () => Promise<{ success: boolean }>;
+  isMaximized: () => Promise<{ success: boolean; isMaximized: boolean }>;
+  close: () => Promise<{ success: boolean }>;
+}
+
+declare global {
+  interface Window {
+    electron: {
+      tab: ElectronTabAPI;
+      windowControl: ElectronWindowControlAPI;
+    };
+  }
+}
