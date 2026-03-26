@@ -236,10 +236,11 @@ export class TabManager implements ITabManager {
       }, 500);
     }
 
-    // If this is the first tab, activate it
-    if (this.tabs.size === 1) {
-      this.switchTab(tab.id);
-    } else if (options.isActive) {
+    // By default, activate the newly created tab
+    // This ensures that when user clicks "new tab", they see the new tab immediately
+    // Only skip activation if explicitly set to false
+    const shouldActivate = options.isActive !== false;
+    if (shouldActivate) {
       this.switchTab(tab.id);
     }
 
