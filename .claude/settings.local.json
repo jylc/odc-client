@@ -19,7 +19,9 @@
       "Bash(find tab_service/src -type f -name *.ts -o -name *.tsx -o -name *.vue -o -name *.jsx)",
       "Bash(find E:/Projects/Web/odc-client -name preload.* -type f)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm ls:*)",
+      "Bash(node -e \"console.log\\(''cwd:'', process.cwd\\(\\)\\); const path = require\\(''path''\\); console.log\\(''preload path:'', path.join\\(process.cwd\\(\\), ''libraries/script'', ''preload.js''\\)\\); const fs = require\\(''fs''\\); console.log\\(''exists:'', fs.existsSync\\(path.join\\(process.cwd\\(\\), ''libraries/script'', ''preload.js''\\)\\)\\)\")"
     ]
   }
 }

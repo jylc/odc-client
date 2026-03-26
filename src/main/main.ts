@@ -27,9 +27,7 @@ import { getParamsFromODCSchema, getSetting, isODCSchemaUrl } from './utils';
 import log from './utils/log';
 import { openMainWebWindow } from './windows/mainWeb';
 import startScreen from './windows/startScreen';
-import { TabManager, TAB_EVENTS } from './tabs';
 import { setupTabEvents } from './tabs/events';
-import { registerTabAndWindowHandlers } from './renderService';
 
 Sentry.init({
   dsn: 'https://859452cf23044aeda8677a8bdcc53081@obc-sentry.oceanbase.com/3',
@@ -138,19 +136,13 @@ async function initApp() {
     log.info('create new main web(window opened)');
 
     /**
-     * 初始化Tab管理器
+     * 设置标签页事件
+     * Note: TabManager initialization and IPC handlers registration
+     * are now done in openMainWebWindow() before loadURL() to ensure
+     * they are ready when the Vue app initializes.
      */
-    const tabManager = TabManager.getInstance();
-    tabManager.initialize(mainWindow);
     setupTabEvents(mainWindow);
-    log.info('create new main web(tab manager initialized)');
-
-    /**
-     * 在 TabManager 初始化之后注册 IPC handlers
-     * 确保 mainWindow 已初始化
-     */
-    registerTabAndWindowHandlers();
-    log.info('create new main web(IPC handlers registered)');
+    log.info('create new main web(tab events set up)');
   }
 
   /**

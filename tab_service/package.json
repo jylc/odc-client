@@ -12,7 +12,6 @@
     "@ant-design/icons-vue": "^7.0.1",
     "@tailwindcss/vite": "^4.2.2",
     "ant-design-vue": "^4.2.0",
-    "styled-components": "^6.3.12",
     "tailwindcss": "^4.2.2",
     "vue": "^3.5.30"
   },

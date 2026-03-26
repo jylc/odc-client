@@ -27,6 +27,15 @@ export default function () {
       ...mainWebWindowConfig,
       webPreferences: {
         ...mainWebWindowConfig.webPreferences,
+        // Ensure preload is explicitly set for the splashscreen window
+        preload: path.join(
+          process.env.NODE_ENV === 'development' ? process.cwd() : process.resourcesPath || '',
+          'libraries/script',
+          'preload.js',
+        ),
+        nodeIntegration: false,
+        contextIsolation: true,
+        webSecurity: false,
         // partition: sessionKey
       },
     },

@@ -40,5 +40,8 @@ export const mainWebWindowConfig: BrowserWindowConstructorOptions = {
       'libraries/script',
       'preload.js',
     ),
+    nodeIntegration: false,
+    contextIsolation: true,
+    webSecurity: false,
   },
 };

@@ -20,6 +20,7 @@ import { PathnameStore } from '../../store';
 import log from '../../utils/log';
 import { downloadEvent } from './event';
 import { TabManager } from '../../tabs';
+import { registerTabHandlers, registerWindowHandlers } from '../../ipc';
 
 // Tab bar height constant (matches tab_service)
 const TAB_BAR_HEIGHT = 80;
@@ -55,6 +56,12 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
   tabManager.initialize(mainWindow);
   tabManager.setTabBarHeight(TAB_BAR_HEIGHT);
 
+  // Register IPC handlers BEFORE loading the UI
+  // This ensures handlers are ready when Vue app calls getAllTabs()
+  registerTabHandlers();
+  registerWindowHandlers();
+  log.info('[MainWindow] IPC handlers registered');
+
   // Get the initial URL for the first content tab
   const initialContentUrl = PathnameStore.getUrl();
   // Use initial URL or default to github.com
@@ -64,9 +71,9 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
   tabManager.setInitialUrl(initialUrl);
 
   // Create first tab BEFORE loading the tab_service UI
-  // This ensures the tab exists when Vue app calls getAllTabs()
+  // The tab data will be available when Vue app calls getAllTabs()
   try {
-    const tab = tabManager.createTab(initialUrl, { isActive: true });
+    const tab = tabManager.createTab(initialUrl, { isActive: true, title: 'GitHub' });
     log.info(`[MainWindow] Created initial tab: ${tab.id} for URL: ${initialUrl}`);
   } catch (error) {
     log.error('[MainWindow] Failed to create initial tab:', error);
