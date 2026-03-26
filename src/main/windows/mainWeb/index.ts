@@ -23,7 +23,8 @@ import { TabManager } from '../../tabs';
 import { registerTabHandlers, registerWindowHandlers } from '../../ipc';
 
 // Tab bar height constant (matches tab_service)
-const TAB_BAR_HEIGHT = 80;
+// 44px TabBar (border-box, includes 1px border-bottom) + 40px UrlBar (border-box, includes 1px border-bottom) = 84px
+const TAB_BAR_HEIGHT = 84;
 
 export function openMainWebWindow(mainWindow: BrowserWindow) {
   // TODO：启动 jar，获取空闲的端口号，然后传递给 renderer 进程

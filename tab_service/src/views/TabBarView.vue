@@ -52,7 +52,7 @@ const displayTabs = computed(() => {
 })
 
 // Tab bar height constant
-const TAB_BAR_HEIGHT = 80 // 40px TabBar + 40px UrlBar
+const TAB_BAR_HEIGHT = 84 // 44px TabBar + 40px UrlBar (both border-box)
 
 /**
  * Initialize tab service and sync with main process
@@ -326,7 +326,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 80px; /* Fixed height for tab bar + URL bar */
+  height: 84px; /* 44px TabBar + 40px UrlBar (both border-box) */
   overflow: hidden;
   user-select: none;
 }

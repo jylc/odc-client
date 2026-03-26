@@ -34,6 +34,7 @@ export const mainWebWindowConfig: BrowserWindowConstructorOptions = {
   show: false,
   frame: false, // 隐藏原生标题栏，使用自定义标签栏
   titleBarStyle: 'hidden', // 隐藏标题栏，macOS 兼容
+  roundedCorners: false, // 禁用 DWM 圆角，避免 BrowserView 四角出现圆角间隙
   webPreferences: {
     preload: path.join(
       process.env.NODE_ENV === 'development' ? process.cwd() : process.resourcesPath || '',
