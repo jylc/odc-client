@@ -51,6 +51,7 @@ const currentPanel = computed(() => {
   width: 100%;
   height: 100vh;
   background: #ffffff;
+  -webkit-app-region: drag;
 }
 
 .settings-body {
@@ -75,6 +76,7 @@ const currentPanel = computed(() => {
   cursor: pointer;
   transition: all 0.2s;
   color: #595959;
+  -webkit-app-region: no-drag;
 }
 
 .menu-item:hover {
@@ -100,5 +102,6 @@ const currentPanel = computed(() => {
   flex: 1;
   overflow-y: auto;
   background: #ffffff;
+  -webkit-app-region: no-drag;
 }
 </style>

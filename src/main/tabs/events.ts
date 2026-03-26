@@ -81,13 +81,6 @@ export function setupTabEvents(mainWindow: BrowserWindow): void {
     }
   });
 
-  // Handle window resize to update tab bounds
-  mainWindow.on('resize', () => {
-    const [width, height] = mainWindow.getSize();
-    const bounds = { x: 0, y: 40, width, height: height - 40 };
-    tabManager.updateTabBounds(bounds);
-  });
-
   log.info('[TabEvents] Tab events set up for main window');
 }
 

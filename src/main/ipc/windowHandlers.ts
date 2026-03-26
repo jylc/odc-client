@@ -167,8 +167,13 @@ export function registerWindowHandlers(): void {
       // Remove menu bar from settings window
       settingsWindow.setMenu(null);
 
-      // Center on parent
-      settingsWindow.center();
+      // Center on parent window (not screen)
+      const [parentWidth, parentHeight] = mainWindow.getSize();
+      const [parentX, parentY] = mainWindow.getPosition();
+      const [settingsWidth, settingsHeight] = settingsWindow.getSize();
+      const x = Math.round(parentX + (parentWidth - settingsWidth) / 2);
+      const y = Math.round(parentY + (parentHeight - settingsHeight) / 2);
+      settingsWindow.setPosition(x, y);
 
       // Show when ready to avoid flash
       settingsWindow.once('ready-to-show', () => {

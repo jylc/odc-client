@@ -416,7 +416,7 @@ export class TabManager implements ITabManager {
     }
   }
 
-  private getTabBounds(): TabBounds {
+  getTabBounds(): TabBounds {
     if (!this.mainWindow) {
       return { x: 0, y: 0, width: 0, height: 0 };
     }

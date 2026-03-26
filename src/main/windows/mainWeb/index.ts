@@ -99,13 +99,7 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
 
   // Set up window resize handler
   mainWindow.on('resize', () => {
-    const [width, height] = mainWindow.getSize();
-    const bounds = {
-      x: 0,
-      y: TAB_BAR_HEIGHT,
-      width,
-      height: height - TAB_BAR_HEIGHT,
-    };
+    const bounds = tabManager.getTabBounds();
     tabManager.updateTabBounds(bounds);
   });
 
