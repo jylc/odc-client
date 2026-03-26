@@ -60,6 +60,11 @@ export class TabContainer implements ITabContainer {
     });
 
     this.setupBrowserViewEvents();
+
+    // Load the initial URL immediately after creating BrowserView
+    this.loadURL(url).catch((error) => {
+      log.error(`[Tab ${this.id}] Failed to load initial URL:`, error);
+    });
   }
 
   /**
