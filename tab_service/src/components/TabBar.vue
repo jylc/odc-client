@@ -1,14 +1,14 @@
 <template>
   <div class="tab-bar" @dblclick="onDoubleClickBar">
     <div class="tabs-container">
-      <TabItem
-        v-for="tab in tabs"
-        :key="tab.id"
-        :tab="tab"
-        :is-active="activeTabId === tab.id"
-        @select="onTabSelect(tab.id)"
-        @close="onTabClose(tab.id)"
-      />
+        <TabItem
+          v-for="tab in tabs"
+          :key="tab.id"
+          :tab="tab"
+          :is-active="activeTabId === tab.id"
+          @select="onTabSelect(tab.id)"
+          @close="onTabClose(tab.id)"
+        />
     </div>
     <div class="tab-actions">
       <a-tooltip title="新建标签页">

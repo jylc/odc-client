@@ -103,6 +103,21 @@ export function registerTabHandlers(): void {
   });
 
   /**
+   * Get default URL for new tabs
+   * Channel: tab:getDefaultUrl
+   * Returns: { url: string }
+   */
+  ipcMain.handle('tab:getDefaultUrl', async () => {
+    try {
+      const url = tabManager.getDefaultUrl();
+      return { url };
+    } catch (error) {
+      log.error('[tab:getDefaultUrl] Error:', error);
+      return { url: 'about:blank' };
+    }
+  });
+
+  /**
    * Update tab bounds
    * Channel: tab:updateBounds
    * Params: { x: number, y: number, width: number, height: number }

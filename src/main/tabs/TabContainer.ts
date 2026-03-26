@@ -159,7 +159,12 @@ export class TabContainer implements ITabContainer {
 
     webContents.on('page-title-updated', (event, title) => {
       if (this.isDestroyed) return;
-      this.title = title || this.extractTitleFromUrl(this.url);
+      // For blank tabs, keep the "新标签页" title
+      if (this.url === 'about:blank') {
+        this.title = '新标签页';
+      } else {
+        this.title = title || this.extractTitleFromUrl(this.url);
+      }
       log.info(`[Tab ${this.id}] Title updated: ${this.title}`);
       this.emitEvent(TAB_EVENTS.TAB_TITLE_UPDATED, { title: this.title });
     });
@@ -203,6 +208,9 @@ export class TabContainer implements ITabContainer {
   }
 
   private extractTitleFromUrl(url: string): string {
+    if (!url || url === 'about:blank') {
+      return '新标签页';
+    }
     try {
       const urlObj = new URL(url);
       if (urlObj.hostname) {

@@ -128,6 +128,10 @@ export class TabManager implements ITabManager {
     log.info(`[TabManager] Initial URL set to: ${url}`);
   }
 
+  getDefaultUrl(): string {
+    return this.initialUrl || 'about:blank';
+  }
+
   /**
    * Create the initial tab with the main window's URL
    * This should be called after the main window has loaded
@@ -305,8 +309,10 @@ export class TabManager implements ITabManager {
       const currentTab = this.tabs.get(this.activeTabId);
       if (currentTab) {
         currentTab.setActive(false);
-        // Remove BrowserView from window
-        this.mainWindow.removeBrowserView(currentTab.browserView);
+        // Remove BrowserView from window if it exists
+        if (currentTab.browserView) {
+          this.mainWindow.removeBrowserView(currentTab.browserView);
+        }
       }
     }
 
@@ -314,9 +320,11 @@ export class TabManager implements ITabManager {
     const bounds = this.getTabBounds();
     tab.setActive(true, bounds);
 
-    // Add BrowserView to window
-    this.mainWindow.addBrowserView(tab.browserView);
-    tab.browserView.setBounds(bounds);
+    // Add BrowserView to window if it exists
+    if (tab.browserView) {
+      this.mainWindow.addBrowserView(tab.browserView);
+      tab.browserView.setBounds(bounds);
+    }
 
     this.activeTabId = tabId;
     log.info(`[TabManager] Switched to tab ${tabId}`);
@@ -339,8 +347,8 @@ export class TabManager implements ITabManager {
       return;
     }
 
-    // Remove BrowserView from window if active
-    if (tab.isActive) {
+    // Remove BrowserView from window if active and it exists
+    if (tab.isActive && tab.browserView) {
       this.mainWindow.removeBrowserView(tab.browserView);
     }
 
@@ -371,6 +379,7 @@ export class TabManager implements ITabManager {
     if (!this.activeTabId) {
       return null;
     }
+    log.info(`[TabManager] Active tab ID: ${this.activeTabId}`);
     return this.tabs.get(this.activeTabId) || null;
   }
 
@@ -399,6 +408,7 @@ export class TabManager implements ITabManager {
   }
 
   setTabBarHeight(height: number): void {
+    log.info(`[TabManager] Setting tab bar height to: ${height}`);
     this.tabBarHeight = height;
     if (this.mainWindow) {
       const bounds = this.getTabBounds();

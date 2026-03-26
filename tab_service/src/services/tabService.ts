@@ -173,6 +173,17 @@ export const tabService = {
   },
 
   /**
+   * Get default URL for new tabs
+   */
+  async getDefaultUrl(): Promise<string> {
+    if (!isElectron) {
+      return 'about:blank';
+    }
+    const result = await getTabAPI().getDefaultUrl();
+    return result?.url || 'about:blank';
+  },
+
+  /**
    * Subscribe to tab events from main process
    * Returns unsubscribe function
    */

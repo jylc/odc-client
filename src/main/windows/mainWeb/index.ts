@@ -57,6 +57,20 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
 
   // Get the initial URL for the first content tab
   const initialContentUrl = PathnameStore.getUrl();
+  // Use initial URL or default to github.com
+  const initialUrl = initialContentUrl || 'https://github.com/';
+
+  // Store the initial URL so new tabs can use it
+  tabManager.setInitialUrl(initialUrl);
+
+  // Create first tab BEFORE loading the tab_service UI
+  // This ensures the tab exists when Vue app calls getAllTabs()
+  try {
+    const tab = tabManager.createTab(initialUrl, { isActive: true });
+    log.info(`[MainWindow] Created initial tab: ${tab.id} for URL: ${initialUrl}`);
+  } catch (error) {
+    log.error('[MainWindow] Failed to create initial tab:', error);
+  }
 
   // Determine tab_service URL (development vs production)
   const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
@@ -76,32 +90,16 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
 
   PathnameStore.reset();
 
-  // After the tab bar loads, create the first content tab with the initial URL
-  mainWindow.webContents.once('did-finish-load', () => {
-    log.info('[MainWindow] Tab bar loaded, creating initial content tab');
-
-    // Use initial URL or default to github.com
-    const initialUrl = initialContentUrl || 'https://github.com/';
-
-    // Create first tab with the ODC content URL
-    try {
-      const tab = tabManager.createTab(initialUrl, { isActive: true });
-      log.info(`[MainWindow] Created initial tab: ${tab.id} for URL: ${initialUrl}`);
-    } catch (error) {
-      log.error('[MainWindow] Failed to create initial tab:', error);
-    }
-
-    // Set up window resize handler
-    mainWindow.on('resize', () => {
-      const [width, height] = mainWindow.getSize();
-      const bounds = {
-        x: 0,
-        y: TAB_BAR_HEIGHT,
-        width,
-        height: height - TAB_BAR_HEIGHT,
-      };
-      tabManager.updateTabBounds(bounds);
-    });
+  // Set up window resize handler
+  mainWindow.on('resize', () => {
+    const [width, height] = mainWindow.getSize();
+    const bounds = {
+      x: 0,
+      y: TAB_BAR_HEIGHT,
+      width,
+      height: height - TAB_BAR_HEIGHT,
+    };
+    tabManager.updateTabBounds(bounds);
   });
 
   return mainWindow;
