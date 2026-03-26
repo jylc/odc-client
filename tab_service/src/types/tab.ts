@@ -69,6 +69,7 @@ export interface ElectronWindowControlAPI {
   unmaximize: () => Promise<{ success: boolean }>;
   isMaximized: () => Promise<{ success: boolean; isMaximized: boolean }>;
   close: () => Promise<{ success: boolean }>;
+  openSettings: () => Promise<{ success: boolean }>;
 }
 
 declare global {

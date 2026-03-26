@@ -47,5 +47,6 @@ contextBridge.exposeInMainWorld('electron', {
     unmaximize: () => ipcRenderer.invoke('window:unmaximize'),
     isMaximized: () => ipcRenderer.invoke('window:isMaximized'),
     close: () => ipcRenderer.invoke('window:close'),
+    openSettings: () => ipcRenderer.invoke('window:open-settings'),
   },
 });

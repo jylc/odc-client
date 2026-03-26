@@ -1,0 +1,241 @@
+<template>
+  <div class="about-panel">
+    <PanelHeader title="关于 DBDC" />
+
+    <!-- Hero Section: App Icon + Name + Version + Buttons -->
+    <div class="hero">
+      <div class="hero-top">
+        <div class="app-icon">
+          <svg width="56" height="56" viewBox="0 0 64 64" fill="none">
+            <defs>
+              <linearGradient id="iconGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#B37FEB"/>
+                <stop offset="100%" stop-color="#722ED1"/>
+              </linearGradient>
+            </defs>
+            <rect width="64" height="64" rx="14" fill="url(#iconGrad)"/>
+            <text x="32" y="42" text-anchor="middle" fill="white" font-size="24" font-weight="bold">D</text>
+          </svg>
+        </div>
+        <div class="app-text">
+          <h2 class="app-name">DBDC {{ version }}</h2>
+          <p class="app-version">当前版本 {{ version }}</p>
+        </div>
+      </div>
+      <div class="hero-actions">
+        <a-button type="primary" class="btn-primary" @click="checkUpdate">
+          <template #icon><ReloadOutlined /></template>
+          检查更新
+        </a-button>
+        <a-button class="btn-outline" @click="openLink('changelog')">
+          查看更新日志
+        </a-button>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="divider"></div>
+
+    <!-- Software Update Section -->
+    <div class="section">
+      <h3 class="section-title">软件更新</h3>
+      <div class="update-option">
+        <a-checkbox v-model:checked="autoUpdate">
+          新版本发布时提醒我
+        </a-checkbox>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="divider"></div>
+
+    <!-- Other Info Section -->
+    <div class="section">
+      <h3 class="section-title">其他信息</h3>
+      <div class="info-item">
+        <SafetyCertificateOutlined class="info-icon info-icon--green" />
+        <span class="info-text">
+          已通过
+          <a href="#" class="inline-link" @click.prevent="openLink('iso')">ISO 27001</a>
+          信息安全管理体系认证
+        </span>
+      </div>
+      <div class="info-links">
+        <a href="#" class="info-link" @click.prevent="openLink('website')">获取最新客户端</a>
+        <a href="#" class="info-link" @click.prevent="openLink('agreement')">服务协议</a>
+        <a href="#" class="info-link" @click.prevent="openLink('privacy')">隐私协议</a>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import { Checkbox as ACheckbox, Button as AButton } from 'ant-design-vue'
+import { ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue'
+import PanelHeader from './PanelHeader.vue'
+
+const version = ref('1.0.0')
+const autoUpdate = ref(true)
+
+const checkUpdate = () => {
+  console.log('Checking for updates...')
+}
+
+const openLink = (type: string) => {
+  console.log('Opening link:', type)
+}
+</script>
+
+<style scoped>
+.about-panel {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Hero Section */
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 24px;
+}
+
+.hero-top {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.app-icon {
+  flex-shrink: 0;
+}
+
+.app-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.app-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.app-version {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin: 0;
+  line-height: 1;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* Buttons */
+.btn-primary {
+  background: #967ADC !important;
+  border-color: #967ADC !important;
+  border-radius: 6px;
+  font-size: 14px;
+  height: 32px;
+}
+
+.btn-primary:hover {
+  background: #722ED1 !important;
+  border-color: #722ED1 !important;
+}
+
+.btn-outline {
+  border: 1px solid #e5e7eb;
+  color: #262626;
+  border-radius: 6px;
+  font-size: 14px;
+  height: 32px;
+}
+
+.btn-outline:hover {
+  border-color: #967ADC !important;
+  color: #967ADC !important;
+}
+
+/* Dividers */
+.divider {
+  height: 1px;
+  background: #f0f0f0;
+}
+
+/* Sections */
+.section {
+  padding: 16px 0 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8c8c8c;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Info Items */
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.info-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.info-icon--green {
+  color: #52c41a;
+}
+
+.info-text {
+  font-size: 13px;
+  color: #595959;
+}
+
+.inline-link {
+  color: #967ADC;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.inline-link:hover {
+  text-decoration: underline;
+}
+
+/* Info Links */
+.info-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-link {
+  color: #967ADC;
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 2.2;
+}
+
+.info-link:hover {
+  text-decoration: underline;
+}
+</style>

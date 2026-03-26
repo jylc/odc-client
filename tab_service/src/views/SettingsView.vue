@@ -1,11 +1,6 @@
 <template>
-  <a-modal
-    v-model:open="visible"
-    :footer="null"
-    :width="640"
-    :style="{ maxWidth: '90vw' }"
-  >
-    <div class="settings-modal">
+  <div class="settings-view">
+    <div class="settings-body">
       <div class="settings-sidebar">
         <div
           v-for="item in menuItems"
@@ -22,70 +17,61 @@
         <component :is="currentPanel" />
       </div>
     </div>
-  </a-modal>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, shallowRef } from 'vue'
-import { Modal as AModal } from 'ant-design-vue'
 import { InfoCircleOutlined } from '@ant-design/icons-vue'
-import AboutPanel from './panels/AboutPanel.vue'
-import type { SettingsMenuItem } from '../../types/settings'
-
-const props = defineProps<{
-  show: boolean
-}>()
-
-const emit = defineEmits<{
-  'update:show': [value: boolean]
-}>()
-
-const visible = computed({
-  get: () => props.show,
-  set: (value) => emit('update:show', value)
-})
+import AboutPanel from '../components/AboutPanel.vue'
+import type { SettingsMenuItem } from '../types/settings'
 
 const activeMenu = ref('about')
 
-// Menu items configuration - easily extensible
 const menuItems = shallowRef<SettingsMenuItem[]>([
   {
     id: 'about',
     label: '关于DBDC',
     icon: InfoCircleOutlined,
-    component: AboutPanel
-  }
-  // Add more menu items here in the future:
-  // { id: 'general', label: '常规设置', icon: SettingOutlined, component: GeneralPanel },
-  // { id: 'shortcuts', label: '快捷键', icon: KeyboardOutlined, component: ShortcutsPanel },
+    component: AboutPanel,
+  },
 ])
 
 const currentPanel = computed(() => {
   const item = menuItems.value.find(m => m.id === activeMenu.value)
   return item?.component || AboutPanel
 })
+
 </script>
 
 <style scoped>
-.settings-modal {
+.settings-view {
   display: flex;
-  min-height: 400px;
-  max-height: 80vh;
-  margin: -20px;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  background: #ffffff;
+}
+
+.settings-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 }
 
 .settings-sidebar {
-  width: 200px;
+  width: 180px;
   flex-shrink: 0;
   background: #fafafa;
   border-right: 1px solid #e8e8e8;
-  padding: 12px 0;
+  padding: 8px 0;
+  overflow-y: auto;
 }
 
 .menu-item {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
+  padding: 10px 16px;
   cursor: pointer;
   transition: all 0.2s;
   color: #595959;
@@ -101,9 +87,9 @@ const currentPanel = computed(() => {
 }
 
 .menu-icon {
-  width: 20px;
-  height: 20px;
-  margin-right: 12px;
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
 }
 
 .menu-label {

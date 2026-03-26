@@ -54,14 +54,11 @@
         </button>
       </a-tooltip>
     </div>
-
-    <!-- Settings Modal -->
-    <SettingsModal v-model:show="showSettings" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { Tooltip as ATooltip } from 'ant-design-vue'
 import {
   PlusOutlined,
@@ -74,7 +71,6 @@ import {
   CloseOutlined,
 } from '@ant-design/icons-vue'
 import TabItem from './TabItem.vue'
-import SettingsModal from './SettingsModal/index.vue'
 
 interface Tab {
   id: string
@@ -97,12 +93,6 @@ const emit = defineEmits<{
 
 // Window maximized state
 const isMaximized = ref(false)
-const showSettings = ref(false)
-
-// Debug: Watch showSettings changes
-watch(showSettings, (newVal) => {
-  console.log('[TabBar] showSettings changed to:', newVal)
-})
 
 const onTabSelect = (id: string) => {
   emit('select', id)
@@ -118,11 +108,15 @@ const onNewTab = () => {
 }
 
 /**
- * Open settings modal
+ * Open settings window via IPC
  */
 const openSettings = () => {
   console.log('[TabBar] openSettings clicked')
-  showSettings.value = true
+  if (window.electron?.windowControl) {
+    window.electron.windowControl.openSettings()
+  } else {
+    console.warn('[TabBar] window.electron.windowControl not available')
+  }
 }
 
 /**
@@ -235,8 +229,8 @@ onMounted(() => {
   display: flex;
   align-items: stretch;
   height: 44px;
-  background: #1e1e1e;
-  border-bottom: 1px solid #333333;
+  background: #f0f0f0;
+  border-bottom: 1px solid #e0e0e0;
   -webkit-app-region: drag;
   user-select: none;
   padding-left: 8px;
@@ -255,7 +249,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 0 8px;
-  background: #1e1e1e;
   -webkit-app-region: no-drag;
 }
 
@@ -265,19 +258,19 @@ onMounted(() => {
   justify-content: center;
   width: 28px;
   height: 28px;
-  color: #888888;
+  color: #666666;
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
 }
 
 .tab-new:hover {
-  background: #252525;
-  color: #ffffff;
+  background: #e0e0e0;
+  color: #333333;
 }
 
 .tab-new:active {
-  background: #333333;
+  background: #d0d0d0;
 }
 
 /* Refresh button */
@@ -285,7 +278,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 0 4px;
-  background: #1e1e1e;
   -webkit-app-region: no-drag;
 }
 
@@ -301,16 +293,16 @@ onMounted(() => {
   background: transparent;
   cursor: pointer;
   transition: background 0.15s;
-  color: #888888;
+  color: #666666;
 }
 
 .refresh-btn:hover {
-  background: #252525;
-  color: #ffffff;
+  background: #e0e0e0;
+  color: #333333;
 }
 
 .refresh-btn:active {
-  background: #333333;
+  background: #d0d0d0;
 }
 
 .refresh-btn:disabled {
@@ -323,7 +315,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 0 4px;
-  background: #1e1e1e;
   -webkit-app-region: no-drag;
 }
 
@@ -339,16 +330,16 @@ onMounted(() => {
   background: transparent;
   cursor: pointer;
   transition: background 0.15s;
-  color: #888888;
+  color: #666666;
 }
 
 .settings-btn:hover {
-  background: #252525;
-  color: #ffffff;
+  background: #e0e0e0;
+  color: #333333;
 }
 
 .settings-btn:active {
-  background: #333333;
+  background: #d0d0d0;
 }
 
 /* Window Controls */
@@ -356,8 +347,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 0 4px;
-  background: #1e1e1e;
-  border-left: 1px solid #333333;
+  border-left: 1px solid #e0e0e0;
   gap: 2px;
   -webkit-app-region: no-drag;
 }
@@ -374,16 +364,16 @@ onMounted(() => {
   background: transparent;
   cursor: pointer;
   transition: background 0.15s;
-  color: #888888;
+  color: #666666;
 }
 
 .window-btn:hover {
-  background: #333333;
-  color: #ffffff;
+  background: #e0e0e0;
+  color: #333333;
 }
 
 .window-btn:active {
-  background: #444444;
+  background: #d0d0d0;
 }
 
 .close-btn:hover {
@@ -400,11 +390,11 @@ onMounted(() => {
 }
 
 .tabs-container::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 3px;
 }
 
 .tabs-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.25);
 }
 </style>

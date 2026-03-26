@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow, app } from 'electron';
+import path from 'path';
 import log from '../utils/log';
 import { TabManager } from '../tabs';
 
@@ -121,6 +122,76 @@ export function registerWindowHandlers(): void {
     }
   });
 
+  /**
+   * Open settings window as a modal child of the main window
+   * Channel: window:open-settings
+   */
+  ipcMain.handle('window:open-settings', async () => {
+    try {
+      const tabManager = TabManager.getInstance();
+      const mainWindow = tabManager.mainWindow;
+      if (!mainWindow) {
+        return { success: false, error: 'No main window' };
+      }
+
+      // Determine settings page URL
+      const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
+      const settingsUrl = isDev
+        ? 'http://localhost:5173/#/settings'
+        : `file://${path.join(app.getAppPath(), 'tab_service', 'dist', 'index.html')}#/settings`;
+
+      const settingsWindow = new BrowserWindow({
+        width: 640,
+        height: 480,
+        modal: true,
+        parent: mainWindow,
+        frame: false,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        show: false,
+        autoHideMenuBar: true,
+        webPreferences: {
+          preload: path.join(
+            process.env.NODE_ENV === 'development' ? process.cwd() : process.resourcesPath || '',
+            'libraries/script',
+            'preload.js',
+          ),
+          nodeIntegration: false,
+          contextIsolation: true,
+          webSecurity: false,
+        },
+      });
+
+      // Remove menu bar from settings window
+      settingsWindow.setMenu(null);
+
+      // Center on parent
+      settingsWindow.center();
+
+      // Show when ready to avoid flash
+      settingsWindow.once('ready-to-show', () => {
+        settingsWindow.show();
+      });
+
+      settingsWindow.loadURL(settingsUrl).catch((e) => {
+        log.error('[WindowHandlers] Failed to load settings page:', e);
+      });
+
+      // Clean up when window is closed
+      settingsWindow.on('closed', () => {
+        settingsWindow.destroy();
+      });
+
+      log.info('[WindowHandlers] Settings window opened');
+      return { success: true };
+    } catch (error) {
+      log.error('[WindowHandlers] open-settings error:', error);
+      return { success: false, error: String(error) };
+    }
+  });
+
   log.info('[WindowHandlers] All window IPC handlers registered');
 }
 
@@ -134,6 +205,7 @@ export function unregisterWindowHandlers(): void {
     'window:unmaximize',
     'window:isMaximized',
     'window:close',
+    'window:open-settings',
   ];
 
   channels.forEach((channel) => {

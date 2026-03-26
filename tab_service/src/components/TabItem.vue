@@ -1,7 +1,7 @@
 <template>
   <div
     class="tab-item"
-    :class="{ active: isActive, dragging: isDragging }"
+    :class="{ active: isActive }"
     @click="onSelect"
   >
     <span class="tab-title">{{ tab.title }}</span>
@@ -22,10 +22,9 @@ interface Tab {
   loading?: boolean
 }
 
-const props = defineProps<{
+defineProps<{
   tab: Tab
   isActive: boolean
-  isDragging?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -51,25 +50,39 @@ const onClose = () => {
   padding: 0 12px;
   margin-right: 2px;
   background: transparent;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
   min-width: 100px;
   max-width: 200px;
   flex-shrink: 0;
-  color: #888888;
+  color: #666666;
   font-size: 14px;
   -webkit-app-region: no-drag;
 }
 
 .tab-item:hover {
-  background: #252525;
-  color: #ffffff;
+  background: #e8e8e8;
+  color: #333333;
 }
 
 .tab-item.active {
-  background: #252525;
-  color: #ffffff;
+  background: #ffffff;
+  color: #333333;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.tab-item.active .close-button {
+  color: #666666;
+}
+
+.tab-item.active .close-button:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #333333;
+}
+
+.tab-item.active .tab-loading {
+  color: #722ED1;
 }
 
 .tab-title {
@@ -95,7 +108,7 @@ const onClose = () => {
   opacity: 0;
   border-radius: 3px;
   transition: opacity 0.2s, background 0.2s;
-  color: #666666;
+  color: #999999;
   flex-shrink: 0;
 }
 
@@ -105,7 +118,7 @@ const onClose = () => {
 }
 
 .close-button:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+  background: rgba(0, 0, 0, 0.08);
+  color: #333333;
 }
 </style>
