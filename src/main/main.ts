@@ -29,6 +29,7 @@ import { openMainWebWindow } from './windows/mainWeb';
 import startScreen from './windows/startScreen';
 import { TabManager, TAB_EVENTS } from './tabs';
 import { setupTabEvents } from './tabs/events';
+import { registerTabAndWindowHandlers } from './renderService';
 
 Sentry.init({
   dsn: 'https://859452cf23044aeda8677a8bdcc53081@obc-sentry.oceanbase.com/3',
@@ -143,6 +144,13 @@ async function initApp() {
     tabManager.initialize(mainWindow);
     setupTabEvents(mainWindow);
     log.info('create new main web(tab manager initialized)');
+
+    /**
+     * 在 TabManager 初始化之后注册 IPC handlers
+     * 确保 mainWindow 已初始化
+     */
+    registerTabAndWindowHandlers();
+    log.info('create new main web(IPC handlers registered)');
   }
 
   /**

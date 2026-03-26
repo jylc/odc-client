@@ -235,10 +235,15 @@ async function onNewTab(): Promise<void> {
   console.log('[App] tabService.isAvailable():', tabService.isAvailable())
 
   if (tabService.isAvailable()) {
-    console.log('[App] Creating tab via tabService.createTab')
-    const newTab = await tabService.createTab('about:blank')
-    console.log('[App] Tab created:', newTab)
-    activeTabId.value = newTab.id
+    try {
+      console.log('[App] Creating tab via tabService.createTab')
+      const newTab = await tabService.createTab('about:blank')
+      console.log('[App] Tab created:', newTab)
+      activeTabId.value = newTab.id
+    } catch (error) {
+      console.error('[App] Failed to create tab:', error)
+      // TODO: Show user-friendly error message
+    }
   } else {
     console.warn('[App] tabService not available, using mock')
     // Local state update for standalone mode

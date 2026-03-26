@@ -111,13 +111,15 @@ export function initRenderService() {
     return fs.readFileSync(defaultSetting).toString();
   });
 
-  /**
-   * 注册Tab相关的IPC处理器
-   */
-  registerTabHandlers();
+  // IPC handlers for tab and window control are now registered in main.ts
+  // after TabManager is initialized to ensure mainWindow is available
+}
 
-  /**
-   * 注册窗口控制相关的IPC处理器
-   */
+/**
+ * Register IPC handlers for tab and window control
+ * This should be called after TabManager is initialized with mainWindow
+ */
+export function registerTabAndWindowHandlers() {
+  registerTabHandlers();
   registerWindowHandlers();
 }

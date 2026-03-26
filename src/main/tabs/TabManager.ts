@@ -81,6 +81,7 @@ export class TabManager implements ITabManager {
     this.mainWindow.webContents.on('before-input-event', (event, input) => {
       // Check for right Control key (location === 2 indicates right key)
       if (input.key === 'Control' && input.location === 2 && input.type === 'keyDown') {
+        log.info('[TabManager] Right Ctrl pressed');
         this.rightCtrlPressCount++;
 
         // Clear previous timer if exists
