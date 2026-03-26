@@ -29,14 +29,25 @@ export const tabService = {
    * Check if Electron API is available
    */
   isAvailable(): boolean {
-    return isElectron;
+    const available = isElectron;
+    console.log(
+      '[tabService] isAvailable:',
+      available,
+      'window.electron:',
+      typeof window !== 'undefined' && !!window.electron,
+      'window.electron?.tab:',
+      typeof window !== 'undefined' && !!window.electron?.tab,
+    );
+    return available;
   },
 
   /**
    * Create a new tab
    */
   async createTab(url: string, options?: Partial<TabOptions>): Promise<TabInfo> {
+    console.log('[tabService] createTab called with URL:', url, 'options:', options);
     if (!isElectron) {
+      console.warn('[tabService] Not in Electron, returning mock');
       // Mock for development
       return {
         id: `tab-${Date.now()}`,
@@ -48,6 +59,7 @@ export const tabService = {
         canGoForward: false,
       };
     }
+    console.log('[tabService] Calling window.electron.tab.create');
     return getTabAPI().create(url, options);
   },
 
@@ -75,9 +87,12 @@ export const tabService = {
    * Get all tabs
    */
   async getAllTabs(): Promise<TabInfo[]> {
+    console.log('[tabService] getAllTabs called');
     if (!isElectron) {
+      console.warn('[tabService] Not in Electron, returning empty array');
       return [];
     }
+    console.log('[tabService] Calling window.electron.tab.getAll');
     return getTabAPI().getAll();
   },
 
@@ -85,9 +100,12 @@ export const tabService = {
    * Get active tab
    */
   async getActiveTab(): Promise<TabInfo | null> {
+    console.log('[tabService] getActiveTab called');
     if (!isElectron) {
+      console.warn('[tabService] Not in Electron, returning null');
       return null;
     }
+    console.log('[tabService] Calling window.electron.tab.getActive');
     return getTabAPI().getActive();
   },
 
@@ -135,9 +153,12 @@ export const tabService = {
    * Reload active tab
    */
   async reload(): Promise<{ success: boolean }> {
+    console.log('[tabService] reload called');
     if (!isElectron) {
+      console.warn('[tabService] Not in Electron, returning success');
       return { success: true };
     }
+    console.log('[tabService] Calling window.electron.tab.reload');
     return getTabAPI().reload();
   },
 

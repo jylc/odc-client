@@ -27,7 +27,7 @@ import { getParamsFromODCSchema, getSetting, isODCSchemaUrl } from './utils';
 import log from './utils/log';
 import { openMainWebWindow } from './windows/mainWeb';
 import startScreen from './windows/startScreen';
-import { TabManager } from './tabs';
+import { TabManager, TAB_EVENTS } from './tabs';
 import { setupTabEvents } from './tabs/events';
 
 Sentry.init({

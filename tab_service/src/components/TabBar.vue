@@ -29,7 +29,7 @@
     <!-- Settings button -->
     <div class="tab-settings">
       <a-tooltip title="设置">
-        <button class="settings-btn" @click="showSettings = true">
+        <button class="settings-btn" @click="openSettings">
           <SettingOutlined :style="{ fontSize: '18px' }" />
         </button>
       </a-tooltip>
@@ -61,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { Tooltip as ATooltip } from 'ant-design-vue'
 import {
   PlusOutlined,
@@ -99,6 +99,11 @@ const emit = defineEmits<{
 const isMaximized = ref(false)
 const showSettings = ref(false)
 
+// Debug: Watch showSettings changes
+watch(showSettings, (newVal) => {
+  console.log('[TabBar] showSettings changed to:', newVal)
+})
+
 const onTabSelect = (id: string) => {
   emit('select', id)
 }
@@ -108,18 +113,30 @@ const onTabClose = (id: string) => {
 }
 
 const onNewTab = () => {
+  console.log('[TabBar] onNewTab clicked')
   emit('new')
+}
+
+/**
+ * Open settings modal
+ */
+const openSettings = () => {
+  console.log('[TabBar] openSettings clicked')
+  showSettings.value = true
 }
 
 /**
  * Check window maximize state and subscribe to changes
  */
 async function checkMaximizeState() {
+  console.log('[TabBar] checkMaximizeState, window.electron?.windowControl:', !!window.electron?.windowControl)
   if (!window.electron?.windowControl) {
+    console.warn('[TabBar] window.electron.windowControl not available')
     return
   }
 
   const result = await window.electron.windowControl.isMaximized()
+  console.log('[TabBar] isMaximized result:', result)
   if (result?.success) {
     isMaximized.value = result.isMaximized
   }
@@ -144,8 +161,12 @@ const onDoubleClickBar = (event: MouseEvent) => {
  * Handle window minimize
  */
 async function onMinimize() {
+  console.log('[TabBar] onMinimize clicked')
   if (window.electron?.windowControl) {
+    console.log('[TabBar] Calling window.electron.windowControl.minimize()')
     await window.electron.windowControl.minimize()
+  } else {
+    console.warn('[TabBar] window.electron.windowControl not available')
   }
 }
 
@@ -153,13 +174,17 @@ async function onMinimize() {
  * Handle window maximize/restore toggle
  */
 async function onToggleMaximize() {
+  console.log('[TabBar] onToggleMaximize clicked, current isMaximized:', isMaximized.value)
   if (!window.electron?.windowControl) {
+    console.warn('[TabBar] window.electron.windowControl not available')
     return
   }
 
   if (isMaximized.value) {
+    console.log('[TabBar] Calling window.electron.windowControl.unmaximize()')
     await window.electron.windowControl.unmaximize()
   } else {
+    console.log('[TabBar] Calling window.electron.windowControl.maximize()')
     await window.electron.windowControl.maximize()
   }
 
@@ -173,8 +198,13 @@ async function onToggleMaximize() {
  * Handle refresh button click
  */
 async function onRefresh() {
+  console.log('[TabBar] onRefresh clicked, isLoading:', props.isLoading)
+  console.log('[TabBar] window.electron?.tab:', !!window.electron?.tab)
   if (window.electron?.tab) {
+    console.log('[TabBar] Calling window.electron.tab.reload()')
     await window.electron.tab.reload()
+  } else {
+    console.warn('[TabBar] window.electron.tab not available')
   }
 }
 
@@ -182,12 +212,20 @@ async function onRefresh() {
  * Handle window close
  */
 async function onClose() {
+  console.log('[TabBar] onClose clicked')
   if (window.electron?.windowControl) {
+    console.log('[TabBar] Calling window.electron.windowControl.close()')
     await window.electron.windowControl.close()
+  } else {
+    console.warn('[TabBar] window.electron.windowControl not available')
   }
 }
 
 onMounted(() => {
+  console.log('[TabBar] Component mounted')
+  console.log('[TabBar] window.electron:', !!window.electron)
+  console.log('[TabBar] window.electron?.tab:', !!window.electron?.tab)
+  console.log('[TabBar] window.electron?.windowControl:', !!window.electron?.windowControl)
   checkMaximizeState()
 })
 </script>

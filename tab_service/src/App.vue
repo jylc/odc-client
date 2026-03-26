@@ -61,6 +61,9 @@ const TAB_BAR_HEIGHT = 80 // 40px TabBar + 40px UrlBar
  * Initialize tab service and sync with main process
  */
 async function initializeTabs(): Promise<void> {
+  console.log('[App] initializeTabs called')
+  console.log('[App] tabService.isAvailable():', tabService.isAvailable())
+
   if (!tabService.isAvailable()) {
     console.warn('[TabService] Running in standalone mode - Electron API not available')
     // Create a mock tab for development
@@ -79,14 +82,19 @@ async function initializeTabs(): Promise<void> {
   }
 
   try {
+    console.log('[App] Getting existing tabs from main process')
     // Get existing tabs from main process
     const allTabs = await tabService.getAllTabs()
     const activeTab = await tabService.getActiveTab()
+
+    console.log('[App] Received', allTabs.length, 'tabs from main process')
+    console.log('[App] Active tab:', activeTab)
 
     tabs.value = allTabs
     activeTabId.value = activeTab?.id || ''
 
     // Notify main process about tab bar height
+    console.log('[App] Setting tab bar height:', TAB_BAR_HEIGHT)
     await tabService.setBarHeight(TAB_BAR_HEIGHT)
 
     // Subscribe to tab events
@@ -223,10 +231,16 @@ async function onTabClose(id: string): Promise<void> {
  * Handle new tab creation
  */
 async function onNewTab(): Promise<void> {
+  console.log('[App] onNewTab called')
+  console.log('[App] tabService.isAvailable():', tabService.isAvailable())
+
   if (tabService.isAvailable()) {
+    console.log('[App] Creating tab via tabService.createTab')
     const newTab = await tabService.createTab('about:blank')
+    console.log('[App] Tab created:', newTab)
     activeTabId.value = newTab.id
   } else {
+    console.warn('[App] tabService not available, using mock')
     // Local state update for standalone mode
     const newTab: TabInfo = {
       id: `tab-${Date.now()}`,
@@ -283,8 +297,14 @@ async function onGoForward(): Promise<void> {
  * Handle reload
  */
 async function onReload(): Promise<void> {
+  console.log('[App] onReload called')
+  console.log('[App] tabService.isAvailable():', tabService.isAvailable())
+
   if (tabService.isAvailable()) {
+    console.log('[App] Calling tabService.reload()')
     await tabService.reload()
+  } else {
+    console.warn('[App] tabService not available')
   }
 }
 
@@ -299,6 +319,10 @@ async function onStop(): Promise<void> {
 
 // Lifecycle hooks
 onMounted(() => {
+  console.log('[App] Component mounted')
+  console.log('[App] window.electron:', !!window.electron)
+  console.log('[App] window.electron?.tab:', !!window.electron?.tab)
+  console.log('[App] window.electron?.windowControl:', !!window.electron?.windowControl)
   initializeTabs()
 })
 

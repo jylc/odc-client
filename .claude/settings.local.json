@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__zread__search_doc",
+      "mcp__zread__read_file",
+      "WebSearch",
+      "Bash(npx tsc:*)",
+      "Bash(npx prettier:*)",
+      "Bash(pnpm run:*)",
+      "mcp__web-reader__webReader",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm type-check:*)",
+      "Bash(find E:/Projects/Web/odc-client/tab_service -maxdepth 3 -type f \\\\\\(-name *.ts -o -name *.tsx -o -name *.vue -o -name *.css -o -name *.scss -o -name *.less \\\\\\))",
+      "mcp__zai-mcp-server__ui_to_artifact",
+      "Bash(pnpm add:*)",
+      "Bash(find tab_service/src -type f \\\\\\(-name *.tsx -o -name *.ts -o -name *.jsx -o -name *.js \\\\\\))",
+      "Bash(pnpm install:*)",
+      "Bash(pnpm --filter tab_service run build)",
+      "Bash(find tab_service/src -type f -name *.ts -o -name *.tsx -o -name *.vue -o -name *.jsx)"
+    ]
+  }
+}

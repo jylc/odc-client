@@ -34,9 +34,9 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
   if (process.platform !== 'darwin') {
     mainWindow.setMenu(null);
   }
-  if (process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development') {
+  /*  if (process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development') {
     mainWindow!.webContents.openDevTools();
-  }
+  }*/
 
   mainWindow.webContents?.on('did-fail-load', (e, code, desc, url, isMainFrame, frameProcId) => {
     log.error('webcontent load failed', code, desc, url, isMainFrame, frameProcId);
