@@ -21,7 +21,6 @@ const pullOBClient = require('./pullOBClient');
 
 const params = process.argv.slice(2);
 const commands = {
-  jar: pullJar.run,
   jre: pullJre.run,
   obclient: pullOBClient.run
 };

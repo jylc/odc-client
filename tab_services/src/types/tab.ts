@@ -73,11 +73,28 @@ export interface ElectronWindowControlAPI {
   openSettings: () => Promise<{ success: boolean }>;
 }
 
+/**
+ * Update API interface (exposed via preload.js)
+ */
+export interface ElectronUpdateAPI {
+  check: () => Promise<{
+    hasUpdate: boolean;
+    version?: string;
+    releaseNotes?: string;
+    error?: string;
+  }>;
+  download: () => Promise<{ success: boolean; error?: string }>;
+  install: () => Promise<{ success: boolean }>;
+  getVersion: () => Promise<{ version: string }>;
+  on: (event: string, callback: (data: any) => void) => () => void;
+}
+
 declare global {
   interface Window {
     electron: {
       tab: ElectronTabAPI;
       windowControl: ElectronWindowControlAPI;
+      update: ElectronUpdateAPI;
     };
   }
 }

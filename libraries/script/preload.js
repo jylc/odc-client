@@ -50,4 +50,16 @@ contextBridge.exposeInMainWorld('electron', {
     close: () => ipcRenderer.invoke('window:close'),
     openSettings: () => ipcRenderer.invoke('window:open-settings'),
   },
+  // Update API
+  update: {
+    check: () => ipcRenderer.invoke('update:check'),
+    download: () => ipcRenderer.invoke('update:download'),
+    install: () => ipcRenderer.invoke('update:install'),
+    getVersion: () => ipcRenderer.invoke('update:get-version'),
+    on: (event, callback) => {
+      const listener = (e, data) => callback(data);
+      ipcRenderer.on(event, listener);
+      return () => ipcRenderer.removeListener(event, listener);
+    },
+  },
 });

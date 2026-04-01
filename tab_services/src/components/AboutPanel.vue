@@ -23,7 +23,7 @@
         </div>
       </div>
       <div class="hero-actions">
-        <a-button type="primary" class="btn-primary" @click="checkUpdate">
+        <a-button type="primary" class="btn-primary" :loading="isChecking" @click="checkUpdate">
           <template #icon><ReloadOutlined /></template>
           检查更新
         </a-button>
@@ -31,6 +31,7 @@
           查看更新日志
         </a-button>
       </div>
+      <p v-if="updateMessage" class="update-message">{{ updateMessage }}</p>
     </div>
 
     <!-- Divider -->
@@ -70,16 +71,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { Checkbox as ACheckbox, Button as AButton } from 'ant-design-vue'
 import { ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue'
 import PanelHeader from './PanelHeader.vue'
+import { updateService, UPDATE_EVENTS } from '../services/updateService'
 
 const version = ref('1.0.0')
 const autoUpdate = ref(true)
+const isChecking = ref(false)
+const updateMessage = ref('')
 
-const checkUpdate = () => {
-  console.log('Checking for updates...')
+const unsubscribers: (() => void)[] = []
+
+onMounted(async () => {
+  // Fetch actual version
+  if (updateService.isAvailable()) {
+    const v = await updateService.getVersion()
+    version.value = v
+  }
+
+  // Subscribe to update events for the settings window
+  const unsubAvailable = updateService.subscribe(UPDATE_EVENTS.UPDATE_AVAILABLE, () => {
+    updateMessage.value = '发现新版本，请在主窗口查看更新提示'
+    isChecking.value = false
+  })
+  unsubscribers.push(unsubAvailable)
+
+  const unsubNotAvailable = updateService.subscribe(UPDATE_EVENTS.UPDATE_NOT_AVAILABLE, () => {
+    updateMessage.value = '当前已是最新版本'
+    isChecking.value = false
+  })
+  unsubscribers.push(unsubNotAvailable)
+
+  const unsubError = updateService.subscribe(UPDATE_EVENTS.UPDATE_ERROR, (data: { message: string }) => {
+    updateMessage.value = `检查失败: ${data.message}`
+    isChecking.value = false
+  })
+  unsubscribers.push(unsubError)
+})
+
+const checkUpdate = async () => {
+  if (isChecking.value) return
+  isChecking.value = true
+  updateMessage.value = '正在检查更新...'
+  await updateService.check()
 }
 
 const openLink = (type: string) => {
@@ -171,6 +207,13 @@ const openLink = (type: string) => {
 .divider {
   height: 1px;
   background: #f0f0f0;
+}
+
+/* Update message */
+.update-message {
+  font-size: 13px;
+  color: #8c8c8c;
+  margin: 4px 0 0 0;
 }
 
 /* Sections */

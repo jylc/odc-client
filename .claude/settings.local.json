@@ -22,7 +22,8 @@
       "Bash(git commit:*)",
       "Bash(npm ls:*)",
       "Bash(node -e \"console.log\\(''cwd:'', process.cwd\\(\\)\\); const path = require\\(''path''\\); console.log\\(''preload path:'', path.join\\(process.cwd\\(\\), ''libraries/script'', ''preload.js''\\)\\); const fs = require\\(''fs''\\); console.log\\(''exists:'', fs.existsSync\\(path.join\\(process.cwd\\(\\), ''libraries/script'', ''preload.js''\\)\\)\\)\")",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(ls E:/Projects/web/odc-client/release/*.exe)"
     ]
   }
 }

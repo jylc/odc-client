@@ -16,3 +16,4 @@
 
 export * from './tabHandlers';
 export * from './windowHandlers';
+export * from './updateHandlers';

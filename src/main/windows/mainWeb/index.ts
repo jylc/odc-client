@@ -20,7 +20,8 @@ import { PathnameStore } from '../../store';
 import log from '../../utils/log';
 import { downloadEvent } from './event';
 import { TabManager } from '../../tabs';
-import { registerTabHandlers, registerWindowHandlers } from '../../ipc';
+import { registerTabHandlers, registerWindowHandlers, registerUpdateHandlers } from '../../ipc';
+import { UpdateService } from '../../updater';
 
 // Tab bar height constant (matches tab_service)
 // 44px TabBar (border-box, includes 1px border-bottom) + 40px UrlBar (border-box, includes 1px border-bottom) = 84px
@@ -61,6 +62,7 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
   // This ensures handlers are ready when Vue app calls getAllTabs()
   registerTabHandlers();
   registerWindowHandlers();
+  registerUpdateHandlers();
   log.info('[MainWindow] IPC handlers registered');
 
   // Get the initial URL for the first content tab
@@ -97,6 +99,15 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
   });
 
   PathnameStore.reset();
+
+  // Check for updates after a delay (don't block startup)
+  setTimeout(() => {
+    UpdateService.getInstance()
+      .checkForUpdate()
+      .catch((error) => {
+        log.error('[MainWindow] Auto update check failed:', error);
+      });
+  }, 5000);
 
   // Set up window resize handler
   mainWindow.on('resize', () => {

@@ -1,6 +1,6 @@
 {
   "name": "odc",
-  "version": "4.4.1",
+  "version": "4.4.0",
   "private": true,
   "description": "企业级数据开发平台",
   "homepage": "https://www.oceanbase.com/",
@@ -18,8 +18,7 @@
     "build-main-prod": "cross-env NODE_OPTIONS=--max_old_space_size=8192 NODE_ENV=production webpack --config ./build/webpack.main.prod.config.js",
     "build:tab-service": "cd tab_services && pnpm install && pnpm build",
     "build:client": "npm run build:tab-service && node scripts/plugin/initPlugins.js && cross-env NODE_OPTIONS=--max_old_space_size=8192 UMI_ENV=client npm run build:odc && npm run build-main-prod",
-    "build:odc": "node scripts/plugin/initPlugins.js && npm run updateDoc && cross-env NODE_OPTIONS=--max_old_space_size=8192 max build",
-    "buildNoDoc": "node scripts/plugin/initPlugins.js && cross-env NODE_OPTIONS=--max_old_space_size=8192 max build",
+    "build:odc": "node scripts/plugin/initPlugins.js && cross-env NODE_OPTIONS=--max_old_space_size=8192 max build",
     "cov": "max test --coverage",
     "dev": "node scripts/plugin/initPlugins.js && cross-env NODE_OPTIONS=--max_old_space_size=8192 max dev",
     "dev:tab-service": "cd tab_services && pnpm dev",
@@ -40,8 +39,7 @@
     "start": "max dev",
     "start-electron": "electron --inspect=5858 -w ./dist/main/main.js",
     "test": "max test",
-    "type-check": "tsc --noEmit",
-    "updateDoc": "node ./scripts/pulldoc.js"
+    "type-check": "tsc --noEmit"
   },
   "lint-staged": {
     "*.{js,jsx,less,md,json}": [
