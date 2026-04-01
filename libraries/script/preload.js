@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('electron', {
     goForward: () => ipcRenderer.invoke('tab:goForward'),
     reload: () => ipcRenderer.invoke('tab:reload'),
     stop: () => ipcRenderer.invoke('tab:stop'),
+    loadURL: (url) => ipcRenderer.invoke('tab:loadURL', url),
     // Event listeners for tab state changes from main process
     on: (event, callback) => {
       const listener = (e, data) => callback(data);

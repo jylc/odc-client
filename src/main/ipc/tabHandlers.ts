@@ -207,6 +207,26 @@ export function registerTabHandlers(): void {
   });
 
   /**
+   * Load URL in active tab
+   * Channel: tab:loadURL
+   * Params: url: string
+   * Returns: { success: boolean }
+   */
+  ipcMain.handle('tab:loadURL', async (event, url: string) => {
+    try {
+      const activeTab = tabManager.getActiveTab();
+      if (activeTab) {
+        await activeTab.loadURL(url);
+        return { success: true };
+      }
+      return { success: false, error: 'No active tab' };
+    } catch (error) {
+      log.error('[tab:loadURL] Error:', error);
+      return { success: false, error: String(error) };
+    }
+  });
+
+  /**
    * Stop loading active tab
    * Channel: tab:stop
    * Returns: { success: boolean }
@@ -310,6 +330,7 @@ export function unregisterTabHandlers(): void {
     'tab:goBack',
     'tab:goForward',
     'tab:reload',
+    'tab:loadURL',
     'tab:stop',
     'tab:toggleDevTools',
     'tab:openDevTools',

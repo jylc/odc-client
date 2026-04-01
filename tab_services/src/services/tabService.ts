@@ -173,6 +173,18 @@ export const tabService = {
   },
 
   /**
+   * Load URL in active tab
+   */
+  async loadURL(url: string): Promise<{ success: boolean }> {
+    console.log('[tabService] loadURL called with URL:', url);
+    if (!isElectron) {
+      console.warn('[tabService] Not in Electron, returning success');
+      return { success: true };
+    }
+    return getTabAPI().loadURL(url);
+  },
+
+  /**
    * Get default URL for new tabs
    */
   async getDefaultUrl(): Promise<string> {

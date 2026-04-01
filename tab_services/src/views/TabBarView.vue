@@ -7,6 +7,8 @@
       @select="onTabSelect"
       @close="onTabClose"
       @new="onNewTab"
+      @go-home="onGoHome"
+      @help="onHelp"
     />
     <UrlBar
       :url="currentTab?.url || ''"
@@ -48,6 +50,7 @@ const displayTabs = computed(() => {
     title: tab.title,
     url: tab.url,
     loading: tab.isLoading,
+    favicon: tab.favicon,
   }))
 })
 
@@ -257,6 +260,38 @@ async function onNewTab(): Promise<void> {
 }
 
 /**
+ * Handle go home - open new tab with github.com
+ */
+async function onGoHome(): Promise<void> {
+  console.log('[TabBarView] onGoHome called')
+
+  if (tabService.isAvailable()) {
+    try {
+      const newTab = await tabService.createTab('https://www.github.com')
+      activeTabId.value = newTab.id
+    } catch (error) {
+      console.error('[TabBarView] Failed to go home:', error)
+    }
+  }
+}
+
+/**
+ * Handle help - open new tab with zhihu.com
+ */
+async function onHelp(): Promise<void> {
+  console.log('[TabBarView] onHelp called')
+
+  if (tabService.isAvailable()) {
+    try {
+      const newTab = await tabService.createTab('https://www.zhihu.com')
+      activeTabId.value = newTab.id
+    } catch (error) {
+      console.error('[TabBarView] Failed to open help:', error)
+    }
+  }
+}
+
+/**
  * Handle URL navigation
  */
 async function onNavigate(url: string): Promise<void> {
@@ -268,6 +303,7 @@ async function onNavigate(url: string): Promise<void> {
 
     if (tabService.isAvailable()) {
       console.log('[TabService] Navigate to:', url)
+      await tabService.loadURL(url)
     }
   }
 }

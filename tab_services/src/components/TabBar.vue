@@ -13,7 +13,12 @@
     <div class="tab-actions">
       <a-tooltip title="新建标签页">
         <div class="tab-new" @click="onNewTab">
-          <PlusOutlined :style="{ fontSize: '16px' }" />
+          <PlusOutlined :style="{ fontSize: '18px' }" />
+        </div>
+      </a-tooltip>
+      <a-tooltip title="主页">
+        <div class="tab-new" @click="onGoHome">
+          <HomeOutlined :style="{ fontSize: '18px' }" />
         </div>
       </a-tooltip>
     </div>
@@ -23,6 +28,14 @@
         <button class="refresh-btn" @click="onRefresh" :disabled="isLoading">
           <ReloadOutlined v-if="!isLoading" :style="{ fontSize: '18px' }" />
           <LoadingOutlined v-else :style="{ fontSize: '18px' }" :spin="true" />
+        </button>
+      </a-tooltip>
+    </div>
+    <!-- Help button -->
+    <div class="tab-help">
+      <a-tooltip title="帮助">
+        <button class="help-btn" @click="onHelp">
+          <QuestionCircleOutlined :style="{ fontSize: '18px' }" />
         </button>
       </a-tooltip>
     </div>
@@ -69,6 +82,8 @@ import {
   BorderOutlined,
   CopyOutlined,
   CloseOutlined,
+  HomeOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons-vue'
 import TabItem from './TabItem.vue'
 
@@ -77,6 +92,7 @@ interface Tab {
   title: string
   url: string
   loading?: boolean
+  favicon?: string
 }
 
 const props = defineProps<{
@@ -89,6 +105,8 @@ const emit = defineEmits<{
   select: [id: string]
   close: [id: string]
   new: []
+  goHome: []
+  help: []
 }>()
 
 // Window maximized state
@@ -105,6 +123,16 @@ const onTabClose = (id: string) => {
 const onNewTab = () => {
   console.log('[TabBar] onNewTab clicked')
   emit('new')
+}
+
+const onGoHome = () => {
+  console.log('[TabBar] onGoHome clicked')
+  emit('goHome')
+}
+
+const onHelp = () => {
+  console.log('[TabBar] onHelp clicked')
+  emit('help')
 }
 
 /**
@@ -248,7 +276,8 @@ onMounted(() => {
 .tab-actions {
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  gap: 2px;
+  padding: 0 2px;
   -webkit-app-region: no-drag;
 }
 
@@ -256,8 +285,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   color: #666666;
   border-radius: 4px;
   cursor: pointer;
@@ -277,11 +306,20 @@ onMounted(() => {
 .tab-refresh {
   display: flex;
   align-items: center;
-  padding: 0 4px;
+  padding: 0 2px;
   -webkit-app-region: no-drag;
 }
 
-.refresh-btn {
+/* Help button */
+.tab-help {
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+  -webkit-app-region: no-drag;
+}
+
+.refresh-btn,
+.help-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -296,12 +334,14 @@ onMounted(() => {
   color: #666666;
 }
 
-.refresh-btn:hover {
+.refresh-btn:hover,
+.help-btn:hover {
   background: #e0e0e0;
   color: #333333;
 }
 
-.refresh-btn:active {
+.refresh-btn:active,
+.help-btn:active {
   background: #d0d0d0;
 }
 
@@ -314,7 +354,7 @@ onMounted(() => {
 .tab-settings {
   display: flex;
   align-items: center;
-  padding: 0 4px;
+  padding: 0 2px;
   -webkit-app-region: no-drag;
 }
 

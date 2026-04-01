@@ -54,6 +54,7 @@ export interface ElectronTabAPI {
   goForward: () => Promise<{ success: boolean }>;
   reload: () => Promise<{ success: boolean }>;
   stop: () => Promise<{ success: boolean }>;
+  loadURL: (url: string) => Promise<{ success: boolean }>;
   getDefaultUrl: () => Promise<{ url: string }>;
   on: (event: string, callback: (data: any) => void) => () => void;
   off: (event: string, callback?: (data: any) => void) => void;

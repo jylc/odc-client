@@ -4,22 +4,27 @@
     :class="{ active: isActive }"
     @click="onSelect"
   >
+    <div class="tab-icon">
+      <LoadingOutlined v-if="tab.loading" class="tab-loading-icon" :spin="true" />
+      <img v-else-if="tab.favicon" :src="tab.favicon" class="tab-favicon" />
+      <GlobalOutlined v-else class="tab-default-icon" />
+    </div>
     <span class="tab-title">{{ tab.title }}</span>
     <div class="close-button" @click.stop="onClose">
       <CloseOutlined :style="{ fontSize: '12px' }" />
     </div>
-    <LoadingOutlined v-if="tab.loading" class="tab-loading" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { CloseOutlined, LoadingOutlined } from '@ant-design/icons-vue'
+import { CloseOutlined, LoadingOutlined, GlobalOutlined } from '@ant-design/icons-vue'
 
 interface Tab {
   id: string
   title: string
   url: string
   loading?: boolean
+  favicon?: string
 }
 
 defineProps<{
@@ -47,7 +52,7 @@ const onClose = () => {
   display: flex;
   align-items: center;
   height: 34px;
-  padding: 0 12px;
+  padding: 0 8px;
   margin-right: 2px;
   background: transparent;
   border-radius: 8px;
@@ -59,6 +64,7 @@ const onClose = () => {
   color: #666666;
   font-size: 14px;
   -webkit-app-region: no-drag;
+  gap: 6px;
 }
 
 .tab-item:hover {
@@ -81,8 +87,29 @@ const onClose = () => {
   color: #333333;
 }
 
-.tab-item.active .tab-loading {
+.tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.tab-loading-icon {
+  font-size: 14px;
   color: #722ED1;
+}
+
+.tab-favicon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.tab-default-icon {
+  font-size: 14px;
+  color: #999;
 }
 
 .tab-title {
@@ -90,13 +117,6 @@ const onClose = () => {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  margin-right: 8px;
-}
-
-.tab-loading {
-  margin-left: 8px;
-  flex-shrink: 0;
-  color: #722ED1;
 }
 
 .close-button {
