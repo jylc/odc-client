@@ -182,15 +182,64 @@ async function initApp() {
     }
   });
 
-  app.on('will-quit', (e) => {
+  // Track if we're in the process of quitting to prevent duplicate cleanup
+  let isQuitting = false;
+
+  app.on('will-quit', async (e) => {
     log.info('app will quit:', e);
-    if (!MainServer.getInstance().isKilled) {
-      e.preventDefault();
-      async function quit() {
-        await MainServer.getInstance().stopServer(true);
-        app.quit();
+
+    // Prevent duplicate quit handling
+    if (isQuitting) {
+      log.info('[Quit] Already quitting, skipping duplicate handler');
+      return;
+    }
+
+    const mainServer = MainServer.getInstance();
+    if (mainServer.isKilled) {
+      log.info('[Quit] Java process already killed, proceeding with quit');
+      return;
+    }
+
+    // Prevent immediate quit to allow cleanup
+    e.preventDefault();
+    isQuitting = true;
+
+    try {
+      log.info('[Quit] Starting cleanup process...');
+
+      // Clean up TabManager (close all tabs and BrowserViews)
+      const { TabManager } = await import('./tabs/TabManager');
+      const tabManager = TabManager.getInstance();
+      if (tabManager) {
+        log.info('[Quit] Destroying TabManager...');
+        tabManager.destroy();
       }
-      quit();
+
+      // Stop the Java server with timeout protection
+      log.info('[Quit] Stopping Java server...');
+      const stopPromise = mainServer.stopServer(true);
+
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Stop server timeout')), 10000),
+      );
+
+      await Promise.race([stopPromise, timeoutPromise])
+        .then(() => {
+          log.info('[Quit] Java server stopped successfully');
+        })
+        .catch((err) => {
+          log.error('[Quit] Error stopping Java server:', err);
+          // Force quit even if stop fails
+        });
+
+      // Now allow the app to quit
+      log.info('[Quit] Cleanup complete, proceeding with quit');
+      app.quit();
+    } catch (error) {
+      log.error('[Quit] Error during cleanup:', error);
+      // Force quit even if there's an error
+      app.quit();
     }
   });
 

@@ -375,40 +375,114 @@ class MainServer {
   }
 
   /**
-   * windows SIGSTOP
+   * Get the appropriate signal for terminating the Java process
+   * - Linux/macOS: SIGTERM (graceful shutdown)
+   * - Windows: Use taskkill or SIGKILL (force kill)
+   * Note: tree-kill library handles cross-platform process tree killing
    */
-  private getSign() {
-    if (process.platform === 'linux' || process.platform === 'darwin') {
-      return 'SIGTERM';
+  private getKillSignal(force: boolean): string | null {
+    if (process.platform === 'win32') {
+      // On Windows, tree-kill doesn't use POSIX signals
+      // The library handles Windows process termination internally
+      return null;
     }
-    return 'SIGSTOP';
+    // On Unix-like systems, use SIGTERM for graceful, SIGKILL for force
+    return force ? 'SIGKILL' : 'SIGTERM';
   }
 
-  public async stopServer(force?: boolean) {
-    // 尝试结束子进程（后端服务）
-    // @see https://stackoverflow.com/questions/18694684/spawn-and-kill-a-process-in-node-js
-    const sign = this.getSign();
-    if (this.process) {
-      return new Promise((resolve) => {
-        log.info(`Before Kill Main Server(pid=${this.process.pid})`);
-        if (force) {
-          kill(this.process.pid, sign, (error) => {
-            log.info('force stop ', error);
-            log.info('停止进程完成');
-            resolve(true);
+  public async stopServer(force?: boolean): Promise<boolean> {
+    if (!this.process) {
+      log.warn('[StopServer] No process to stop');
+      this.isKilled = true;
+      return true;
+    }
+
+    const pid = this.process.pid;
+    log.info(`[StopServer] Stopping Java process (pid=${pid}, force=${force})`);
+
+    return new Promise((resolve) => {
+      // Set timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        log.error(`[StopServer] Timeout waiting for process ${pid} to exit`);
+        this.isKilled = true;
+        resolve(false);
+      }, 8000);
+
+      // Clean up timeout if process exits normally
+      const cleanup = () => {
+        clearTimeout(timeout);
+      };
+
+      // Listen for process exit
+      const exitHandler = () => {
+        cleanup();
+        log.info(`[StopServer] Java process ${pid} exited successfully`);
+        this.isKilled = true;
+        resolve(true);
+      };
+
+      // Add exit listener if not already present
+      if (this.process.listenerCount('exit') === 0) {
+        this.process.once('exit', exitHandler);
+      } else {
+        // If there's already a listener, use a one-time handler
+        this.process.on('exit', exitHandler);
+      }
+
+      // Kill the process tree
+      if (process.platform === 'win32') {
+        // Windows: tree-kill handles Windows process killing
+        kill(pid, (error) => {
+          cleanup();
+          if (error) {
+            // Process might already be dead
+            if ((error as any).code === 'ESRCH') {
+              log.info(`[StopServer] Process ${pid} already terminated`);
+              this.isKilled = true;
+              resolve(true);
+            } else {
+              log.error(`[StopServer] Error killing process ${pid}:`, error);
+              this.isKilled = true;
+              resolve(false);
+            }
+          } else {
+            log.info(`[StopServer] Kill signal sent to process ${pid}`);
+            // Don't resolve here, wait for exit event
+          }
+        });
+      } else {
+        // Unix-like systems: use signal
+        const signal = this.getKillSignal(!!force);
+        if (signal) {
+          kill(pid, signal, (error) => {
+            cleanup();
+            if (error) {
+              // Process might already be dead
+              if ((error as any).code === 'ESRCH') {
+                log.info(`[StopServer] Process ${pid} already terminated`);
+                this.isKilled = true;
+                resolve(true);
+              } else {
+                log.error(`[StopServer] Error killing process ${pid}:`, error);
+                this.isKilled = true;
+                resolve(false);
+              }
+            } else {
+              log.info(`[StopServer] Sent ${signal} to process ${pid}`);
+              // Don't resolve here, wait for exit event
+            }
           });
         } else {
-          kill(this.process.pid, (error) => {
-            setTimeout(() => {
-              this.process.kill(sign);
-            }, 200);
-            log.info('[kill tree pid]', error);
-          });
+          cleanup();
+          resolve(false);
         }
-        log.info('Kill Main Server Success');
-        this.isKilled = true;
-      });
-    }
+      }
+
+      // If forcing, give more time for cleanup
+      if (force) {
+        // Already handled by timeout above
+      }
+    });
   }
 }
 
