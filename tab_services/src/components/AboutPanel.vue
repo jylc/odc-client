@@ -49,24 +49,6 @@
 
     <!-- Divider -->
     <div class="divider"></div>
-
-    <!-- Other Info Section -->
-    <div class="section">
-      <h3 class="section-title">其他信息</h3>
-      <div class="info-item">
-        <SafetyCertificateOutlined class="info-icon info-icon--green" />
-        <span class="info-text">
-          已通过
-          <a href="#" class="inline-link" @click.prevent="openLink('iso')">ISO 27001</a>
-          信息安全管理体系认证
-        </span>
-      </div>
-      <div class="info-links">
-        <a href="#" class="info-link" @click.prevent="openLink('website')">获取最新客户端</a>
-        <a href="#" class="info-link" @click.prevent="openLink('agreement')">服务协议</a>
-        <a href="#" class="info-link" @click.prevent="openLink('privacy')">隐私协议</a>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -76,6 +58,7 @@ import { Checkbox as ACheckbox, Button as AButton } from 'ant-design-vue'
 import { ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue'
 import PanelHeader from './PanelHeader.vue'
 import { updateService, UPDATE_EVENTS } from '../services/updateService'
+import { appLinks } from '../config/links'
 
 const version = ref('1.0.0')
 const autoUpdate = ref(true)
@@ -120,6 +103,29 @@ const checkUpdate = async () => {
 
 const openLink = (type: string) => {
   console.log('Opening link:', type)
+
+  let url = ''
+  switch (type) {
+    case 'changelog':
+      url = appLinks.home
+      break
+    case 'update':
+      url = appLinks.update
+      break
+    case 'help':
+      url = appLinks.help
+      break
+    default:
+      return
+  }
+
+  // Open in external browser
+  if (window.electron?.shell) {
+    window.electron.shell.openExternal(url)
+  } else {
+    // Fallback: open in new tab
+    window.open(url, '_blank')
+  }
 }
 </script>
 

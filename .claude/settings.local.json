@@ -23,7 +23,12 @@
       "Bash(npm ls:*)",
       "Bash(node -e \"console.log\\(''cwd:'', process.cwd\\(\\)\\); const path = require\\(''path''\\); console.log\\(''preload path:'', path.join\\(process.cwd\\(\\), ''libraries/script'', ''preload.js''\\)\\); const fs = require\\(''fs''\\); console.log\\(''exists:'', fs.existsSync\\(path.join\\(process.cwd\\(\\), ''libraries/script'', ''preload.js''\\)\\)\\)\")",
       "Bash(git checkout:*)",
-      "Bash(ls E:/Projects/web/odc-client/release/*.exe)"
+      "Bash(ls E:/Projects/web/odc-client/release/*.exe)",
+      "mcp__plugin_everything-claude-code_exa__get_code_context_exa",
+      "mcp__plugin_everything-claude-code_context7__resolve-library-id",
+      "mcp__plugin_everything-claude-code_context7__query-docs",
+      "mcp__plugin_everything-claude-code_exa__web_search_exa",
+      "Read(//tmp/**)"
     ]
   }
 }

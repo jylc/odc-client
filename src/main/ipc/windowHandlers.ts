@@ -19,6 +19,9 @@ import path from 'path';
 import log from '../utils/log';
 import { TabManager } from '../tabs';
 
+// Track the settings window to prevent multiple instances
+let settingsWindow: BrowserWindow | null = null;
+
 /**
  * Register all IPC handlers for window control operations
  */
@@ -134,13 +137,20 @@ export function registerWindowHandlers(): void {
         return { success: false, error: 'No main window' };
       }
 
+      // If settings window already exists, focus it instead of creating a new one
+      if (settingsWindow && !settingsWindow.isDestroyed()) {
+        log.info('[WindowHandlers] Settings window already exists, focusing it');
+        settingsWindow.focus();
+        return { success: true, alreadyOpen: true };
+      }
+
       // Determine settings page URL
       const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
       const settingsUrl = isDev
         ? 'http://localhost:5173/#/settings'
         : `file://${path.join(app.getAppPath(), 'tab_service', 'dist', 'index.html')}#/settings`;
 
-      const settingsWindow = new BrowserWindow({
+      settingsWindow = new BrowserWindow({
         width: 640,
         height: 480,
         modal: true,
@@ -177,7 +187,7 @@ export function registerWindowHandlers(): void {
 
       // Show when ready to avoid flash
       settingsWindow.once('ready-to-show', () => {
-        settingsWindow.show();
+        settingsWindow?.show();
       });
 
       settingsWindow.loadURL(settingsUrl).catch((e) => {
@@ -186,13 +196,14 @@ export function registerWindowHandlers(): void {
 
       // Clean up when window is closed
       settingsWindow.on('closed', () => {
-        settingsWindow.destroy();
+        settingsWindow = null;
       });
 
       log.info('[WindowHandlers] Settings window opened');
       return { success: true };
     } catch (error) {
       log.error('[WindowHandlers] open-settings error:', error);
+      settingsWindow = null;
       return { success: false, error: String(error) };
     }
   });

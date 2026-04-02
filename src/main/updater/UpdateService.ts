@@ -1,18 +1,29 @@
-import { app, net, shell, BrowserWindow } from 'electron';
-import fs from 'fs';
-import path from 'path';
-import http from 'http';
-import https from 'https';
-import compareVersions from 'compare-versions';
+import { app, BrowserWindow } from 'electron';
+import { autoUpdater, UpdateInfo } from 'electron-updater';
 import log from '../utils/log';
 import { TabManager } from '../tabs';
 
+// Type for release notes (can be string or array of objects with note property)
+type ReleaseNoteInfo = { note?: string; [key: string]: any };
+
+// Update server configuration
 const UPDATE_SERVER_URL = 'http://192.168.1.26:12345/';
+
+// Configure autoUpdater feed URL
+autoUpdater.setFeedURL({
+  provider: 'generic',
+  url: UPDATE_SERVER_URL,
+  channel: 'latest',
+});
+
+// Configure autoUpdater behavior
+autoUpdater.autoDownload = false; // Manual download trigger
+autoUpdater.autoInstallOnAppQuit = false; // Manual install trigger
 
 export interface RemoteUpdateInfo {
   version: string;
   releaseNotes?: string;
-  downloadUrl: string;
+  downloadUrl?: string;
 }
 
 export type UpdateState =
@@ -27,13 +38,13 @@ export class UpdateService {
   private static instance: UpdateService | null = null;
   private state: UpdateState = 'idle';
   private updateInfo: RemoteUpdateInfo | null = null;
-  private downloadProgress = 0;
-  private installerPath: string | null = null;
   private currentVersion: string;
 
   private constructor() {
     this.currentVersion = app.getVersion();
+    this.setupAutoUpdaterListeners();
     log.info(`[UpdateService] Current version: ${this.currentVersion}`);
+    log.info(`[UpdateService] Update server: ${UPDATE_SERVER_URL}`);
   }
 
   static getInstance(): UpdateService {
@@ -51,16 +62,98 @@ export class UpdateService {
     return this.updateInfo;
   }
 
-  getProgress(): number {
-    return this.downloadProgress;
-  }
-
   getCurrentVersion(): string {
     return this.currentVersion;
   }
 
   /**
-   * Check remote server for updates
+   * Format release notes to string
+   * electron-updater returns string | ReleaseNoteInfo[]
+   */
+  private formatReleaseNotes(releaseNotes: string | ReleaseNoteInfo[] | null | undefined): string {
+    if (!releaseNotes) {
+      return '';
+    }
+    if (typeof releaseNotes === 'string') {
+      return releaseNotes;
+    }
+    // Handle ReleaseNoteInfo[] format
+    if (Array.isArray(releaseNotes)) {
+      return releaseNotes.map((note) => note.note || JSON.stringify(note)).join('\n');
+    }
+    return String(releaseNotes);
+  }
+
+  /**
+   * Set up electron-updater event listeners
+   * Converts electron-updater events to our custom format
+   */
+  private setupAutoUpdaterListeners(): void {
+    // When checking for updates
+    autoUpdater.on('checking-for-update', () => {
+      this.state = 'checking';
+      this.sendToRenderer('update:checking', {});
+      log.info('[UpdateService] Checking for updates...');
+    });
+
+    // When update is available
+    autoUpdater.on('update-available', (info: UpdateInfo) => {
+      this.state = 'available';
+      const releaseNotes = this.formatReleaseNotes(info.releaseNotes);
+      this.updateInfo = {
+        version: info.version,
+        releaseNotes,
+        downloadUrl: info.path,
+      };
+      this.sendToRenderer('update:available', {
+        version: info.version,
+        releaseNotes,
+      });
+      log.info(`[UpdateService] Update available: ${info.version}`);
+    });
+
+    // When no update is available
+    autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+      this.state = 'idle';
+      this.sendToRenderer('update:not-available', {});
+      log.info('[UpdateService] No update available');
+    });
+
+    // Download progress
+    autoUpdater.on(
+      'download-progress',
+      (progress: {
+        percent: number;
+        bytesPerSecond: number;
+        transferred: number;
+        total: number;
+      }) => {
+        this.state = 'downloading';
+        const percent = Math.round(progress.percent);
+        this.sendToRenderer('update:progress', { progress: percent });
+        log.debug(`[UpdateService] Download progress: ${percent}%`);
+      },
+    );
+
+    // Update downloaded
+    autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
+      this.state = 'downloaded';
+      this.sendToRenderer('update:downloaded', {
+        version: info.version,
+      });
+      log.info(`[UpdateService] Update downloaded: ${info.version}`);
+    });
+
+    // Error occurred
+    autoUpdater.on('error', (error: Error) => {
+      this.state = 'error';
+      this.sendToRenderer('update:error', { message: error.message });
+      log.error('[UpdateService] Update error:', error);
+    });
+  }
+
+  /**
+   * Check for updates
    */
   async checkForUpdate(): Promise<RemoteUpdateInfo | null> {
     if (this.state === 'checking' || this.state === 'downloading') {
@@ -68,79 +161,40 @@ export class UpdateService {
       return null;
     }
 
-    this.state = 'checking';
-    this.sendToRenderer('update:checking', {});
-
     try {
-      const remoteInfo = await this.fetchUpdateInfo();
+      const result = await autoUpdater.checkForUpdates();
 
-      if (!remoteInfo || !remoteInfo.version) {
-        this.state = 'idle';
-        this.sendToRenderer('update:not-available', {});
-        log.info('[UpdateService] No update available');
-        return null;
+      if (result && result.updateInfo) {
+        return {
+          version: result.updateInfo.version,
+          releaseNotes: this.formatReleaseNotes(result.updateInfo.releaseNotes),
+        };
       }
-
-      const hasUpdate = compareVersions.compare(remoteInfo.version, this.currentVersion, '>');
-
-      if (!hasUpdate) {
-        this.state = 'idle';
-        this.sendToRenderer('update:not-available', {});
-        log.info(
-          `[UpdateService] Already up to date (remote: ${remoteInfo.version}, local: ${this.currentVersion})`,
-        );
-        return null;
-      }
-
-      this.state = 'available';
-      this.updateInfo = remoteInfo;
-      this.sendToRenderer('update:available', {
-        version: remoteInfo.version,
-        releaseNotes: remoteInfo.releaseNotes || '',
-        downloadUrl: remoteInfo.downloadUrl,
-      });
-      log.info(`[UpdateService] Update available: ${remoteInfo.version}`);
-      return remoteInfo;
+      return null;
     } catch (error) {
+      log.error('[UpdateService] Check failed:', error);
       this.state = 'error';
       this.sendToRenderer('update:error', { message: String(error) });
-      log.error('[UpdateService] Check failed:', error);
       return null;
     }
   }
 
   /**
-   * Download the update installer
+   * Download the update
    */
   async downloadUpdate(): Promise<boolean> {
-    if (!this.updateInfo?.downloadUrl) {
-      log.warn('[UpdateService] No download URL available');
+    if (this.state !== 'available') {
+      log.warn('[UpdateService] No update available to download');
       return false;
     }
 
-    this.state = 'downloading';
-    this.downloadProgress = 0;
-    this.sendToRenderer('update:progress', { progress: 0 });
-
     try {
-      const fileName = `dbdc-update-${this.updateInfo.version}.exe`;
-      const tempDir = app.getPath('temp');
-      this.installerPath = path.join(tempDir, fileName);
-
-      await this.downloadFile(this.updateInfo.downloadUrl, this.installerPath);
-
-      this.state = 'downloaded';
-      this.downloadProgress = 100;
-      this.sendToRenderer('update:downloaded', {
-        installerPath: this.installerPath,
-        version: this.updateInfo.version,
-      });
-      log.info(`[UpdateService] Download complete: ${this.installerPath}`);
+      await autoUpdater.downloadUpdate();
       return true;
     } catch (error) {
+      log.error('[UpdateService] Download failed:', error);
       this.state = 'error';
       this.sendToRenderer('update:error', { message: String(error) });
-      log.error('[UpdateService] Download failed:', error);
       return false;
     }
   }
@@ -149,109 +203,22 @@ export class UpdateService {
    * Install the downloaded update
    */
   async installUpdate(): Promise<void> {
-    if (!this.installerPath || !fs.existsSync(this.installerPath)) {
-      log.warn('[UpdateService] Installer not found');
+    if (this.state !== 'downloaded') {
+      log.warn('[UpdateService] No update downloaded to install');
       return;
     }
 
-    log.info(`[UpdateService] Launching installer: ${this.installerPath}`);
-    await shell.openPath(this.installerPath);
-    app.quit();
-  }
-
-  /**
-   * Fetch update info from remote server
-   */
-  private fetchUpdateInfo(): Promise<RemoteUpdateInfo> {
-    return new Promise((resolve, reject) => {
-      const request = http.request(UPDATE_SERVER_URL, { method: 'GET', timeout: 10000 }, (res) => {
-        let data = '';
-
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-
-        res.on('end', () => {
-          try {
-            const info = JSON.parse(data) as RemoteUpdateInfo;
-            resolve(info);
-          } catch (error) {
-            reject(new Error(`Failed to parse update info: ${error}`));
-          }
-        });
+    try {
+      // electron-updater will restart and install
+      setImmediate(() => {
+        app.removeAllListeners('window-all-closed');
+        autoUpdater.quitAndInstall();
       });
-
-      request.on('error', (error) => {
-        reject(new Error(`Network error: ${error.message}`));
-      });
-
-      request.on('timeout', () => {
-        request.destroy();
-        reject(new Error('Request timeout'));
-      });
-
-      request.end();
-    });
-  }
-
-  /**
-   * Download file with progress tracking
-   */
-  private downloadFile(url: string, destPath: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const protocol = url.startsWith('https') ? https : http;
-
-      const request = protocol.request(url, { method: 'GET' }, (res) => {
-        if (
-          res.statusCode &&
-          res.statusCode >= 300 &&
-          res.statusCode < 400 &&
-          res.headers.location
-        ) {
-          // Follow redirect
-          this.downloadFile(res.headers.location, destPath).then(resolve).catch(reject);
-          return;
-        }
-
-        if (res.statusCode !== 200) {
-          reject(new Error(`Download failed with status: ${res.statusCode}`));
-          return;
-        }
-
-        const totalBytes = parseInt(res.headers['content-length'] || '0', 10);
-        let receivedBytes = 0;
-
-        const fileStream = fs.createWriteStream(destPath);
-
-        res.on('data', (chunk: Buffer) => {
-          receivedBytes += chunk.length;
-          if (totalBytes > 0) {
-            this.downloadProgress = Math.round((receivedBytes / totalBytes) * 100);
-          } else {
-            this.downloadProgress = Math.min(99, Math.round(receivedBytes / 1024 / 1024));
-          }
-          this.sendToRenderer('update:progress', { progress: this.downloadProgress });
-        });
-
-        res.pipe(fileStream);
-
-        fileStream.on('finish', () => {
-          fileStream.close();
-          resolve();
-        });
-
-        fileStream.on('error', (error) => {
-          fs.unlinkSync(destPath);
-          reject(error);
-        });
-      });
-
-      request.on('error', (error) => {
-        reject(new Error(`Download error: ${error.message}`));
-      });
-
-      request.end();
-    });
+    } catch (error) {
+      log.error('[UpdateService] Install failed:', error);
+      this.state = 'error';
+      this.sendToRenderer('update:error', { message: String(error) });
+    }
   }
 
   /**

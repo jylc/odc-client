@@ -16,11 +16,6 @@
           <PlusOutlined :style="{ fontSize: '18px' }" />
         </div>
       </a-tooltip>
-      <a-tooltip title="主页">
-        <div class="tab-new" @click="onGoHome">
-          <HomeOutlined :style="{ fontSize: '18px' }" />
-        </div>
-      </a-tooltip>
     </div>
     <!-- Refresh button -->
     <div class="tab-refresh">
@@ -28,6 +23,14 @@
         <button class="refresh-btn" @click="onRefresh" :disabled="isLoading">
           <ReloadOutlined v-if="!isLoading" :style="{ fontSize: '18px' }" />
           <LoadingOutlined v-else :style="{ fontSize: '18px' }" :spin="true" />
+        </button>
+      </a-tooltip>
+    </div>
+    <!-- Home button -->
+    <div class="tab-home">
+      <a-tooltip title="主页">
+        <button class="home-btn" @click="onGoHome">
+          <HomeOutlined :style="{ fontSize: '18px' }" />
         </button>
       </a-tooltip>
     </div>
@@ -71,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { Tooltip as ATooltip } from 'ant-design-vue'
 import {
   PlusOutlined,
@@ -112,6 +115,10 @@ const emit = defineEmits<{
 // Window maximized state
 const isMaximized = ref(false)
 
+// Debounce flag for settings button to prevent multiple clicks
+const isOpeningSettings = ref(false)
+let settingsOpenTimer: NodeJS.Timeout | null = null
+
 const onTabSelect = (id: string) => {
   emit('select', id)
 }
@@ -138,13 +145,42 @@ const onHelp = () => {
 /**
  * Open settings window via IPC
  */
-const openSettings = () => {
+const openSettings = async () => {
   console.log('[TabBar] openSettings clicked')
-  if (window.electron?.windowControl) {
-    window.electron.windowControl.openSettings()
-  } else {
-    console.warn('[TabBar] window.electron.windowControl not available')
+
+  // Prevent multiple rapid clicks
+  if (isOpeningSettings.value) {
+    console.log('[TabBar] Settings window is already being opened, ignoring click')
+    return
   }
+
+  isOpeningSettings.value = true
+
+  try {
+    if (window.electron?.windowControl) {
+      const result = await window.electron.windowControl.openSettings()
+      console.log('[TabBar] openSettings result:', result)
+
+      // If window was already open, reset the flag immediately
+      if (result?.alreadyOpen) {
+        isOpeningSettings.value = false
+        return
+      }
+    } else {
+      console.warn('[TabBar] window.electron.windowControl not available')
+    }
+  } catch (error) {
+    console.error('[TabBar] Failed to open settings:', error)
+  }
+
+  // Reset the flag after a short delay to prevent rapid clicks
+  if (settingsOpenTimer) {
+    clearTimeout(settingsOpenTimer)
+  }
+  settingsOpenTimer = setTimeout(() => {
+    isOpeningSettings.value = false
+    settingsOpenTimer = null
+  }, 500)
 }
 
 /**
@@ -250,6 +286,14 @@ onMounted(() => {
   console.log('[TabBar] window.electron?.windowControl:', !!window.electron?.windowControl)
   checkMaximizeState()
 })
+
+onUnmounted(() => {
+  // Clean up the settings open timer
+  if (settingsOpenTimer) {
+    clearTimeout(settingsOpenTimer)
+    settingsOpenTimer = null
+  }
+})
 </script>
 
 <style scoped>
@@ -310,6 +354,14 @@ onMounted(() => {
   -webkit-app-region: no-drag;
 }
 
+/* Home button */
+.tab-home {
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+  -webkit-app-region: no-drag;
+}
+
 /* Help button */
 .tab-help {
   display: flex;
@@ -319,6 +371,7 @@ onMounted(() => {
 }
 
 .refresh-btn,
+.home-btn,
 .help-btn {
   display: flex;
   align-items: center;
@@ -335,12 +388,14 @@ onMounted(() => {
 }
 
 .refresh-btn:hover,
+.home-btn:hover,
 .help-btn:hover {
   background: #e0e0e0;
   color: #333333;
 }
 
 .refresh-btn:active,
+.home-btn:active,
 .help-btn:active {
   background: #d0d0d0;
 }

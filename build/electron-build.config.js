@@ -7,6 +7,11 @@ const config = {
   productName: 'OceanBase Developer Center',
   compression: buildMode || 'normal',
   afterSign: "electron-builder-notarize",
+  publish: {
+    provider: 'generic',
+    url: 'http://192.168.1.26:12345/',
+    channel: 'latest',
+  },
   mac: {
     hardenedRuntime: true,
     category: 'public.app-category.developer-tools',

@@ -43,6 +43,7 @@ import UrlBar from '../components/UrlBar.vue'
 import UpdateModal from '../components/UpdateModal.vue'
 import { tabService, TAB_EVENTS } from '../services/tabService'
 import { updateService, UPDATE_EVENTS } from '../services/updateService'
+import { appLinks } from '../config/links'
 import type { TabInfo } from '../types/tab'
 
 // Tab state - synced with main process via IPC
@@ -306,14 +307,14 @@ async function onNewTab(): Promise<void> {
 }
 
 /**
- * Handle go home - open new tab with github.com
+ * Handle go home - open new tab with configured home URL
  */
 async function onGoHome(): Promise<void> {
-  console.log('[TabBarView] onGoHome called')
+  console.log('[TabBarView] onGoHome called, URL:', appLinks.home)
 
   if (tabService.isAvailable()) {
     try {
-      const newTab = await tabService.createTab('https://www.github.com')
+      const newTab = await tabService.createTab(appLinks.home)
       activeTabId.value = newTab.id
     } catch (error) {
       console.error('[TabBarView] Failed to go home:', error)
@@ -322,14 +323,14 @@ async function onGoHome(): Promise<void> {
 }
 
 /**
- * Handle help - open new tab with zhihu.com
+ * Handle help - open new tab with configured help URL
  */
 async function onHelp(): Promise<void> {
-  console.log('[TabBarView] onHelp called')
+  console.log('[TabBarView] onHelp called, URL:', appLinks.help)
 
   if (tabService.isAvailable()) {
     try {
-      const newTab = await tabService.createTab('https://www.zhihu.com')
+      const newTab = await tabService.createTab(appLinks.help)
       activeTabId.value = newTab.id
     } catch (error) {
       console.error('[TabBarView] Failed to open help:', error)
