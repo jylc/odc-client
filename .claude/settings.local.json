@@ -33,7 +33,15 @@
       "Bash(node scripts/pack-offline-deps.js)",
       "Bash(node scripts/pack-offline-deps.cjs)",
       "Bash(npm pack:*)",
-      "Bash(ls *.tgz)"
+      "Bash(ls *.tgz)",
+      "Bash(pnpm store:*)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(powershell -Command \"\\(Get-ChildItem -Path 'E:\\\\.pnpm-store\\\\v10' -Recurse | Measure-Object -Property Length -Sum\\).Sum / 1GB\")",
+      "Read(//e/Projects/Web/odc-client/tab_services/.pnpm-store/v10/files/00/$\\(ls 'E:/Projects/Web/odc-client/tab_services/.pnpm-store/v10/files/**)",
+      "Bash(rm -rf node_modules)",
+      "Bash(node scripts/install-offline-deps.cjs)",
+      "Bash(rm:*)",
+      "Bash(grep -l \"binding-win32\" \"E:/Projects/Web/odc-client/tab_services/offline-deps/pnpm-store/v10/index/\"*/*)"
     ]
   }
 }

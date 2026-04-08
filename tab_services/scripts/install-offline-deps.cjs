@@ -1,188 +1,202 @@
 #!/usr/bin/env node
 
 /**
- * 离线安装 tab_services 依赖
+ * 从离线 store 安装 tab_services 依赖
+ *
+ * 原理：
+ *   1. 使用 --store-dir 参数指定离线 store 目录
+ *   2. 使用 offline-deps/pnpm-lock.yaml 作为 lockfile
+ *   3. 执行 pnpm install --offline --frozen-lockfile
  *
  * 用法: pnpm run offline:install
- * 或者: node scripts/install-offline-deps.cjs
- *
- * 此脚本将从 offline-deps/tarballs/ 目录安装所有依赖
  */
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const {
+  log,
+  getPnpmVersion,
+  getNodeVersion,
+  getPlatform,
+  readManifest,
+  isVersionCompatible,
+  formatBytes,
+} = require(path.join(__dirname, 'lib', 'store-utils.cjs'));
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const OFFLINE_DEPS_DIR = path.join(ROOT_DIR, 'offline-deps');
-const TARBALLS_DIR = path.join(OFFLINE_DEPS_DIR, 'tarballs');
+const STORE_DIR = path.join(OFFLINE_DEPS_DIR, 'pnpm-store');
 const MANIFEST_PATH = path.join(OFFLINE_DEPS_DIR, 'manifest.json');
+const LOCKFILE_SOURCE = path.join(OFFLINE_DEPS_DIR, 'pnpm-lock.yaml');
+const LOCKFILE_DEST = path.join(ROOT_DIR, 'pnpm-lock.yaml');
+const NODE_MODULES = path.join(ROOT_DIR, 'node_modules');
 
-const colors = {
-  reset: '\x1b[0m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[36m',
-  red: '\x1b[31m',
-};
+function validateOfflinePackage() {
+  log('验证离线包...', 'blue');
 
-function log(message, color = 'reset') {
-  console.log(`${colors[color]}${message}${colors.reset}`);
-}
-
-// 检查离线包是否存在
-function checkOfflinePackage() {
   if (!fs.existsSync(MANIFEST_PATH)) {
-    log('错误: 找不到 manifest.json，请先运行打包脚本', 'red');
-    process.exit(1);
+    throw new Error('找不到 offline-deps/manifest.json，请先运行打包脚本');
   }
 
-  if (!fs.existsSync(TARBALLS_DIR)) {
-    log('错误: 找不到 tarballs 目录', 'red');
-    process.exit(1);
+  if (!fs.existsSync(STORE_DIR)) {
+    throw new Error('找不到 offline-deps/pnpm-store/ 目录');
   }
 
-  const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf-8'));
-
-  // 检查 Node.js 版本
-  if (manifest.nodeVersion) {
-    const requiredVersion = manifest.nodeVersion.slice(1); // 移除 'v'
-    const currentVersion = process.version.slice(1);
-    log(`打包时 Node.js 版本: v${requiredVersion}`, 'blue');
-    log(`当前 Node.js 版本: v${currentVersion}`, 'blue');
-
-    const majorRequired = requiredVersion.split('.')[0];
-    const majorCurrent = currentVersion.split('.')[0];
-
-    if (majorRequired !== majorCurrent) {
-      log(`警告: Node.js 主版本不匹配 (期望: ${majorRequired}.x, 当前: ${majorCurrent}.x)`, 'yellow');
+  // 检查 store 目录是否非空（兼容 v3 和 v10）
+  const storeVersions = ['v10', 'v3'];
+  let storeFound = false;
+  for (const ver of storeVersions) {
+    const filesDir = path.join(STORE_DIR, ver, 'files');
+    if (fs.existsSync(filesDir)) {
+      const filesCount = fs.readdirSync(filesDir).length;
+      if (filesCount > 0) {
+        storeFound = true;
+        break;
+      }
     }
   }
+  if (!storeFound) {
+    throw new Error('pnpm store 内容不完整或为空');
+  }
+
+  if (!fs.existsSync(LOCKFILE_SOURCE)) {
+    throw new Error('找不到 offline-deps/pnpm-lock.yaml');
+  }
+
+  const manifest = readManifest(MANIFEST_PATH);
+  log(`  离线包生成时间: ${manifest.generatedAt}`, 'blue');
+  log(`  包含 Store 大小: ${formatBytes(manifest.totalSize || 0)}`, 'blue');
 
   return manifest;
 }
 
-// 方法1: 使用本地 npm 仓库安装
-function installWithLocalRegistry(manifest) {
-  log('使用本地仓库方式安装...', 'blue');
+function checkEnvironment(manifest) {
+  log('检查环境兼容性...', 'blue');
 
-  const npmrcPath = path.join(ROOT_DIR, '.npmrc');
-  const backupPath = path.join(ROOT_DIR, '.npmrc.backup');
+  const pnpmVersion = getPnpmVersion();
+  log(`  pnpm 版本: ${pnpmVersion}`, 'blue');
 
-  // 备份现有的 .npmrc
-  if (fs.existsSync(npmrcPath)) {
-    fs.copyFileSync(npmrcPath, backupPath);
-    log('已备份现有 .npmrc 文件', 'yellow');
+  const nodeVersion = getNodeVersion();
+  log(`  Node.js 版本: ${nodeVersion}`, 'blue');
+
+  const currentPlatform = getPlatform();
+  log(`  当前平台: ${currentPlatform}`, 'blue');
+
+  if (manifest.platform && manifest.platform !== currentPlatform) {
+    log(`  警告: 平台不匹配 (打包: ${manifest.platform}, 当前: ${currentPlatform})`, 'yellow');
+    log(`  平台相关的原生模块可能无法正常工作`, 'yellow');
   }
 
-  try {
-    // 创建本地仓库配置
-    const tarballsPath = TARBALLS_DIR.replace(/\\/g, '/');
-    const npmrcContent = `registry=file://${tarballsPath}
-strict-peer-dependencies=false
-`;
-    fs.writeFileSync(npmrcPath, npmrcContent);
-    log('已配置本地 npm 仓库', 'green');
-
-    // 清理现有的 node_modules
-    const nodeModulesPath = path.join(ROOT_DIR, 'node_modules');
-    if (fs.existsSync(nodeModulesPath)) {
-      log('正在清理现有的 node_modules...', 'yellow');
-      fs.rmSync(nodeModulesPath, { recursive: true, force: true });
+  if (manifest.nodeVersion) {
+    if (!isVersionCompatible(nodeVersion, manifest.nodeVersion)) {
+      log(`  警告: Node.js 主版本不匹配 (打包: ${manifest.nodeVersion}, 当前: ${nodeVersion})`, 'yellow');
     }
+  }
 
-    // 使用 pnpm 安装
-    execSync('pnpm install --no-frozen-lockfile', {
-      cwd: ROOT_DIR,
-      stdio: 'inherit',
-    });
-
-    log('依赖安装完成!', 'green');
-  } finally {
-    // 恢复 .npmrc
-    if (fs.existsSync(backupPath)) {
-      fs.copyFileSync(backupPath, npmrcPath);
-      fs.unlinkSync(backupPath);
-      log('已恢复原始 .npmrc 文件', 'yellow');
-    } else if (fs.existsSync(npmrcPath) && !fs.existsSync(backupPath)) {
-      fs.unlinkSync(npmrcPath);
+  if (manifest.pnpmVersion) {
+    const current = pnpmVersion.match(/^(\d+)/);
+    const required = manifest.pnpmVersion.match(/^(\d+)/);
+    if (current && required && current[1] !== required[1]) {
+      log(`  警告: pnpm 主版本不匹配 (打包: ${manifest.pnpmVersion}, 当前: ${pnpmVersion})`, 'yellow');
+      log(`  建议使用相同主版本的 pnpm 以确保 store 兼容性`, 'yellow');
     }
   }
 }
 
-// 方法2: 直接从 tarball 安装
-function installFromTarballs(manifest) {
-  log('使用直接安装方式...', 'blue');
-
-  const packageJsonPath = path.join(ROOT_DIR, 'package.json');
-  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-
-  // 修改 package.json 使用本地 tarball
-  const originalPackageJson = JSON.stringify(packageJson, null, 2);
-
-  function replaceDeps(deps) {
-    if (!deps) return deps;
-
-    for (const [name, version] of Object.entries(deps)) {
-      const manifestDep = manifest.dependencies.find(d => d.name === name);
-      if (manifestDep) {
-        const tarballPath = path.join(TARBALLS_DIR, manifestDep.tarball);
-        if (fs.existsSync(tarballPath)) {
-          deps[name] = tarballPath;
-        }
-      }
+function ensureLockfile() {
+  if (!fs.existsSync(LOCKFILE_DEST)) {
+    log('从离线包复制 pnpm-lock.yaml...', 'blue');
+    fs.copyFileSync(LOCKFILE_SOURCE, LOCKFILE_DEST);
+  } else {
+    const srcContent = fs.readFileSync(LOCKFILE_SOURCE, 'utf-8');
+    const destContent = fs.readFileSync(LOCKFILE_DEST, 'utf-8');
+    if (srcContent !== destContent) {
+      log('  警告: 项目 lockfile 与离线包 lockfile 不一致', 'yellow');
+      log('  使用离线包中的 lockfile 以确保依赖版本匹配', 'yellow');
+      fs.copyFileSync(LOCKFILE_SOURCE, LOCKFILE_DEST);
     }
-    return deps;
-  }
-
-  packageJson.dependencies = replaceDeps(packageJson.dependencies);
-  packageJson.devDependencies = replaceDeps(packageJson.devDependencies);
-
-  // 写入修改后的 package.json
-  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
-
-  try {
-    // 清理 node_modules
-    const nodeModulesPath = path.join(ROOT_DIR, 'node_modules');
-    if (fs.existsSync(nodeModulesPath)) {
-      fs.rmSync(nodeModulesPath, { recursive: true, force: true });
-    }
-
-    // 安装
-    execSync('pnpm install', {
-      cwd: ROOT_DIR,
-      stdio: 'inherit',
-    });
-
-    log('依赖安装完成!', 'green');
-  } finally {
-    // 恢复原始 package.json
-    fs.writeFileSync(packageJsonPath, originalPackageJson);
-    log('已恢复原始 package.json', 'yellow');
   }
 }
 
-// 主函数
+function cleanNodeModules() {
+  if (fs.existsSync(NODE_MODULES)) {
+    log('清理现有 node_modules...', 'blue');
+    fs.rmSync(NODE_MODULES, { recursive: true, force: true });
+  }
+}
+
+function runOfflineInstall() {
+  log('执行离线安装...', 'blue');
+  log('', 'reset');
+
+  const storeDirNormalized = STORE_DIR.replace(/\\/g, '/');
+  const cmd = `pnpm install --offline --frozen-lockfile --store-dir "${storeDirNormalized}"`;
+
+  log(`  命令: ${cmd}`, 'blue');
+  log('', 'reset');
+
+  execSync(cmd, {
+    cwd: ROOT_DIR,
+    stdio: 'inherit',
+    timeout: 300000,
+  });
+}
+
+function verifyInstall() {
+  log('', 'reset');
+  log('验证安装...', 'blue');
+
+  if (!fs.existsSync(NODE_MODULES)) {
+    throw new Error('node_modules 未创建');
+  }
+
+  const packageJson = JSON.parse(
+    fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf-8')
+  );
+  const allDeps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+  let missing = 0;
+
+  for (const name of Object.keys(allDeps)) {
+    const depPath = path.join(NODE_MODULES, name);
+    if (!fs.existsSync(depPath)) {
+      log(`  缺失: ${name}`, 'red');
+      missing++;
+    }
+  }
+
+  if (missing > 0) {
+    throw new Error(`有 ${missing} 个直接依赖未安装`);
+  }
+
+  log(`  所有 ${Object.keys(allDeps).length} 个直接依赖已安装`, 'green');
+}
+
 async function main() {
   try {
     log('=== tab_services 离线依赖安装 ===', 'blue');
     log('', 'reset');
 
-    const manifest = checkOfflinePackage();
-    log(`找到 ${manifest.dependencies.length} 个依赖包`, 'green');
-    log('', 'reset');
+    // 1. 验证离线包
+    const manifest = validateOfflinePackage();
 
-    // 尝试方法1，失败则使用方法2
-    try {
-      await installWithLocalRegistry(manifest);
-    } catch (error) {
-      log(`本地仓库方式失败: ${error.message}`, 'yellow');
-      log('尝试直接安装方式...', 'yellow');
-      await installFromTarballs(manifest);
-    }
+    // 2. 检查环境
+    checkEnvironment(manifest);
+
+    // 3. 确保 lockfile 存在
+    ensureLockfile();
+
+    // 4. 清理旧安装
+    cleanNodeModules();
+
+    // 5. 使用 --store-dir 执行离线安装
+    runOfflineInstall();
+
+    // 6. 验证安装
+    verifyInstall();
 
     log('', 'reset');
-    log('=== 安装完成 ===', 'green');
+    log('=== 离线安装完成 ===', 'green');
   } catch (error) {
     log('', 'reset');
     log(`安装失败: ${error.message}`, 'red');
