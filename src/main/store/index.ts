@@ -25,6 +25,10 @@ export class PathnameStore {
   public static pathname: string = PathnameStore.defaultPathname;
   public static hash: string = '';
 
+  // Token 参数存储
+  private static pendingToken: string | null = null;
+  private static pendingEnv: string | null = null;
+
   public static getUrl = () => {
     const href = url.format({
       pathname: PathnameStore.pathname,
@@ -41,6 +45,9 @@ export class PathnameStore {
   public static setPathname = (pathname: string) => {
     PathnameStore.pathname = pathname;
   };
+  public static setHash = (hash: string) => {
+    PathnameStore.hash = hash;
+  };
   public static reset = () => {
     PathnameStore.pathname = PathnameStore.defaultPathname;
     PathnameStore.hash = '';
@@ -48,4 +55,36 @@ export class PathnameStore {
   public static addParams = (params: string) => {
     PathnameStore.hash = '#/gateway/' + params;
   };
+
+  /**
+   * 存储 token 参数
+   */
+  public static setTokenParams(token: string, env?: string) {
+    PathnameStore.pendingToken = token;
+    if (env) {
+      PathnameStore.pendingEnv = env;
+    }
+    log.info('Token params stored:', { token: token?.substring(0, 10) + '...', env });
+  }
+
+  /**
+   * 获取并清除 token 参数
+   */
+  public static consumeTokenParams(): {
+    token: string | null;
+    env: string | null;
+  } {
+    const token = PathnameStore.pendingToken;
+    const env = PathnameStore.pendingEnv;
+    PathnameStore.pendingToken = null;
+    PathnameStore.pendingEnv = null;
+    return { token, env };
+  }
+
+  /**
+   * 检查是否有待处理的 token
+   */
+  public static hasPendingToken(): boolean {
+    return PathnameStore.pendingToken !== null;
+  }
 }

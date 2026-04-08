@@ -31,6 +31,80 @@ export function getParamsFromODCSchema(url: string) {
   return url.replace(/^odc:\/\//, '');
 }
 
+/**
+ * 检测是否是 dbdc:// 协议 URL
+ */
+export function isDBDCSchemaUrl(url: string): boolean {
+  return /^dbdc:\/\//.test(url);
+}
+
+/**
+ * 提取 dbdc:// 协议后的完整 URL
+ * 例如: dbdc://http://localhost:8000/#/sqlworkspace?token=xxx
+ *       -> http://localhost:8000/#/sqlworkspace?token=xxx
+ */
+export function getUrlFromDBDCSchema(url: string): string {
+  return url.replace(/^dbdc:\/\//, '');
+}
+
+/**
+ * 从 URL 中解析参数
+ * 支持从 hash 中提取 query 参数
+ */
+export function parseUrlParams(urlString: string): {
+  token?: string;
+  env?: string;
+  pathname: string;
+  hash: string;
+} {
+  try {
+    const url = new URL(urlString);
+    const hash = url.hash;
+
+    // 从 hash 中解析 query 参数
+    const queryStart = hash.indexOf('?');
+    let token: string | undefined;
+    let env: string | undefined;
+
+    if (queryStart !== -1) {
+      const queryString = hash.substring(queryStart + 1);
+      const urlParams = new URLSearchParams(queryString);
+      token = urlParams.get('token') || undefined;
+      env = urlParams.get('env') || undefined;
+    }
+
+    return {
+      token,
+      env,
+      pathname: url.pathname,
+      hash: hash,
+    };
+  } catch (error) {
+    log.error('Failed to parse URL params:', error);
+    return { pathname: '', hash: '' };
+  }
+}
+
+/**
+ * 通用的 schema URL 检测（兼容 odc 和 dbdc）
+ */
+export function isSchemaUrl(url: string): boolean {
+  return /^odc:\/\//.test(url) || /^dbdc:\/\//.test(url);
+}
+
+/**
+ * 通用的 schema URL 参数提取
+ */
+export function getUrlFromSchema(url: string): string {
+  if (/^odc:\/\//.test(url)) {
+    return getParamsFromODCSchema(url);
+  }
+  if (/^dbdc:\/\//.test(url)) {
+    return getUrlFromDBDCSchema(url);
+  }
+  return url;
+}
+
 export async function getAvailablePort(): Promise<number> {
   if (process.env.ODC_PORT) {
     return parseInt(process.env.ODC_PORT);

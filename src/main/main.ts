@@ -23,8 +23,18 @@ import { initRenderService } from './renderService';
 import MainServer from './server/main';
 import setAboutPanelOptions from './setAboutPanel';
 import { PathnameStore } from './store';
-import { getParamsFromODCSchema, getSetting, isODCSchemaUrl } from './utils';
+import {
+  getParamsFromODCSchema,
+  getSetting,
+  isODCSchemaUrl,
+  isDBDCSchemaUrl,
+  getUrlFromDBDCSchema,
+  parseUrlParams,
+  isSchemaUrl,
+  getUrlFromSchema,
+} from './utils';
 import log from './utils/log';
+import { injectTokenToLocalStorage } from './utils/token-injection';
 import { openMainWebWindow } from './windows/mainWeb';
 import startScreen from './windows/startScreen';
 import { setupTabEvents } from './tabs/events';
@@ -61,21 +71,80 @@ if (setting && Object.keys(setting).includes('client.electron.params')) {
 }
 /** end */
 
-function resolveWinRemoteParams(argv) {
-  if (argv.length > 1) {
-    log.info('app opened with argv');
-    const odcSchema = argv.find((a) => {
-      return isODCSchemaUrl(a);
-    });
-    if (odcSchema) {
-      PathnameStore.addParams(getParamsFromODCSchema(odcSchema));
+/**
+ * 解析 Windows 协议参数
+ *
+ * Windows 下的协议 URL 参数格式：
+ * - process.argv: ['electron.exe', 'main.js', 'dbdc://http://...']
+ * - second-instance argv: ['electron.exe', 'dbdc://http://...']
+ * - second-instance commandLine: 完整命令行字符串
+ *
+ * 需要从 argv 中找到 dbdc:// 协议 URL
+ */
+function resolveWinRemoteParams(argv, mainWindow = null) {
+  if (!argv || argv.length === 0) {
+    log.info('[resolveWinRemoteParams] No argv provided');
+    return;
+  }
+
+  log.info('[resolveWinRemoteParams] argv:', argv);
+
+  // 在 argv 中查找 dbdc:// 协议 URL
+  const schemaUrl = argv.find((a) => {
+    return isSchemaUrl(a);
+  });
+
+  if (schemaUrl) {
+    log.info('[resolveWinRemoteParams] Found schema URL:', schemaUrl);
+
+    try {
+      const fullUrl = getUrlFromSchema(schemaUrl);
+      log.info('[resolveWinRemoteParams] Extracted full URL:', fullUrl);
+
+      const params = parseUrlParams(fullUrl);
+      log.info('[resolveWinRemoteParams] Parsed params:', params);
+
+      // 如果有 token 参数，存储起来供后续注入使用
+      if (params.token) {
+        PathnameStore.setTokenParams(params.token, params.env);
+        log.info('[resolveWinRemoteParams] Token params stored from schema URL');
+      }
+
+      // 解析完整 URL 并设置 pathname 和 hash
+      try {
+        const urlObj = new URL(fullUrl);
+        // 设置 pathname（包含路径部分）
+        PathnameStore.setPathname(urlObj.pathname);
+        // 设置 hash（包含 # 及之后的内容）
+        PathnameStore.setHash(urlObj.hash);
+        log.info('[resolveWinRemoteParams] Set pathname:', urlObj.pathname);
+        log.info('[resolveWinRemoteParams] Set hash:', urlObj.hash);
+      } catch (e) {
+        log.error('[resolveWinRemoteParams] Failed to parse URL:', e);
+        // 如果解析失败，回退到原来的方式
+        PathnameStore.addParams(fullUrl);
+      }
+
+      // 如果窗口已就绪，立即注入 token
+      if (mainWindow && params.token) {
+        injectTokenToLocalStorage(mainWindow, params.token);
+      }
+
+      return true; // 成功解析
+    } catch (error) {
+      log.error('[resolveWinRemoteParams] Error processing schema URL:', error);
+      return false;
     }
+  } else {
+    log.info('[resolveWinRemoteParams] No schema URL found in argv');
+    return false;
   }
 }
 
 log.info('getLockFinished');
 
 log.info('APP Start');
+log.info('process.argv:', process.argv);
 log.info(`Mem: \n${JSON.stringify(process.getSystemMemoryInfo(), null, 4)}`);
 log.info(`OS: \n${os.type()}
 platform: ${os.platform()}
@@ -94,25 +163,40 @@ if (!gotTheLock) {
   initApp();
 }
 async function initApp() {
-  app.on('second-instance', (event, argv) => {
-    log.info('app second-instance');
+  // Windows second-instance 事件
+  // event: IpcMainEvent
+  // argv: string[] - 第二实例的命令行参数
+  // workingDirectory: string - 第二实例的工作目录
+  app.on('second-instance', (event, argv, workingDirectory) => {
+    log.info('========== second-instance event fired ==========');
+    log.info('[second-instance] argv:', argv);
+    log.info('[second-instance] workingDirectory:', workingDirectory);
+    log.info('[second-instance] platform:', process.platform);
+
     if (process.platform === 'win32') {
-      /**
-       * schema 外部打开
-       */
-      resolveWinRemoteParams(argv);
-      if (MainServer.getInstance().status == 'ready') {
-        log.info('app second-instance(open new window)');
-        createNewMainWeb();
+      // 获取当前活动窗口用于 token 注入
+      const windows = BrowserWindow.getAllWindows();
+      const activeWindow = windows.length > 0 ? windows[0] : null;
+
+      log.info('[second-instance] Found windows:', windows.length);
+      log.info('[second-instance] Active window:', activeWindow ? 'yes' : 'no');
+
+      // Windows 下，点击 dbdc://xxx 链接会把 URL 作为参数传递
+      // argv 格式: ['electron.exe路径', 'dbdc://http://...']
+      const resolved = resolveWinRemoteParams(argv, activeWindow);
+
+      if (resolved && MainServer.getInstance().status == 'ready') {
+        log.info('[second-instance] Server ready, focusing window');
+        // 聚焦到现有窗口而不是创建新窗口
+        if (activeWindow) {
+          if (activeWindow.isMinimized()) activeWindow.restore();
+          activeWindow.focus();
+        }
+      } else if (!resolved) {
+        log.info('[second-instance] No protocol URL found, ignoring');
       }
     }
   });
-
-  /**
-   * 因为注册表安全原因，暂时不支持 url schema 方式
-   */
-  // registerProtocolClient();
-  // log.info('register url schema');
 
   /**
    * 开启错误日志收集
@@ -156,18 +240,25 @@ async function initApp() {
         .map((display) => `width: ${display.size.width}, height: ${display.size.height}`)
         .join(' | ')}`,
     );
+
+    /**
+     * 注册自定义协议（必须在 ready 之后调用）
+     * 注意：在开发环境中，这只能处理已运行应用的 second-instance 事件
+     * 要让系统识别 dbdc:// 协议，需要运行注册脚本配置注册表
+     */
+    if (process.platform === 'win32') {
+      const registered = app.setAsDefaultProtocolClient('dbdc');
+      log.info('[Ready] register dbdc:// protocol for Windows, result:', registered);
+    }
+    // macOS: 在 Info.plist 中配置协议 (CFBundleURLTypes)
+
     if (process.platform === 'darwin') {
       createMenu(app);
       setAboutPanelOptions(app);
       log.info('App Menu Ready');
     }
-    // if (process.platform === 'win32') {
-    //   /**
-    //    * schema 外部打开
-    //    */
-    //   log.info('windows Schema resolved');
-    //   resolveWinRemoteParams(process.argv);
-    // }
+
+    // 处理启动时的参数（如果是通过 dbdc:// 协议启动的）
     resolveWinRemoteParams(process.argv);
     createNewMainWeb();
   });
@@ -265,11 +356,34 @@ async function initApp() {
    * mac web唤起应用
    */
   app.on('open-url', async (event, urlStr) => {
-    log.info('app open-url');
-    if (urlStr) {
-      log.info('app open-url(add params)');
-      PathnameStore.addParams(getParamsFromODCSchema(urlStr));
+    event.preventDefault(); // 阻止默认行为
+    log.info('app open-url:', urlStr);
+
+    if (urlStr && isSchemaUrl(urlStr)) {
+      const fullUrl = getUrlFromSchema(urlStr);
+      const params = parseUrlParams(fullUrl);
+
+      log.info('[open-url] fullUrl:', fullUrl);
+      log.info('[open-url] params:', params);
+
+      if (params.token) {
+        PathnameStore.setTokenParams(params.token, params.env);
+        log.info('[open-url] Token params stored from macOS open-url');
+      }
+
+      // 解析完整 URL 并设置 pathname 和 hash
+      try {
+        const urlObj = new URL(fullUrl);
+        PathnameStore.setPathname(urlObj.pathname);
+        PathnameStore.setHash(urlObj.hash);
+        log.info('[open-url] Set pathname:', urlObj.pathname);
+        log.info('[open-url] Set hash:', urlObj.hash);
+      } catch (e) {
+        log.error('[open-url] Failed to parse URL:', e);
+        PathnameStore.addParams(fullUrl);
+      }
     }
+
     const instance = MainServer.getInstance();
     if (instance.status == 'ready') {
       log.info('app open-url(ready and open new window)');

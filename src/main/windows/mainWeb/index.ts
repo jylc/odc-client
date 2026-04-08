@@ -18,6 +18,7 @@ import { app, BrowserWindow, dialog, BrowserView } from 'electron';
 import path from 'path';
 import { PathnameStore } from '../../store';
 import log from '../../utils/log';
+import { injectTokenToLocalStorage } from '../../utils/token-injection';
 import { downloadEvent } from './event';
 import { TabManager } from '../../tabs';
 import { registerTabHandlers, registerWindowHandlers, registerUpdateHandlers } from '../../ipc';
@@ -96,6 +97,25 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
       `Please submit the log to the administrator（${app.getPath('userData')}/logs）`,
     );
     app.quit();
+  });
+
+  // 等待页面加载完成后，检查并注入 token
+  mainWindow.webContents.on('did-finish-load', () => {
+    log.info('[MainWindow] Page loaded, checking for pending token...');
+
+    if (PathnameStore.hasPendingToken()) {
+      const { token } = PathnameStore.consumeTokenParams();
+      if (token) {
+        // 异步注入 token
+        injectTokenToLocalStorage(mainWindow, token)
+          .then(() => {
+            log.info('[MainWindow] Token injection completed');
+          })
+          .catch((error) => {
+            log.error('[MainWindow] Token injection failed:', error);
+          });
+      }
+    }
   });
 
   PathnameStore.reset();
