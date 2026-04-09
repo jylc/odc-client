@@ -44,7 +44,11 @@ export function isDBDCSchemaUrl(url: string): boolean {
  *       -> http://localhost:8000/#/sqlworkspace?token=xxx
  */
 export function getUrlFromDBDCSchema(url: string): string {
-  return url.replace(/^dbdc:\/\//, '');
+  if (process.env.NODE_ENV === 'development') {
+    return url.replace(/^dbdc-dev:\/\//, '');
+  } else {
+    return url.replace(/^dbdc:\/\//, '');
+  }
 }
 
 /**
@@ -58,7 +62,8 @@ export function parseUrlParams(urlString: string): {
   hash: string;
 } {
   try {
-    const url = new URL(urlString);
+    // new URL() 要求完整协议，缺少协议时补全 https
+    const url = new URL(/^https?:\/\//.test(urlString) ? urlString : `https://${urlString}`);
     const hash = url.hash;
 
     // 从 hash 中解析 query 参数
@@ -89,13 +94,22 @@ export function parseUrlParams(urlString: string): {
  * 通用的 schema URL 检测（兼容 odc 和 dbdc）
  */
 export function isSchemaUrl(url: string): boolean {
-  return /^odc:\/\//.test(url) || /^dbdc:\/\//.test(url);
+  if (process.env.NODE_ENV === 'development') {
+    return /^odc:\/\//.test(url) || /^dbdc-dev:\/\//.test(url);
+  } else {
+    return /^odc:\/\//.test(url) || /^dbdc:\/\//.test(url);
+  }
 }
 
 /**
  * 通用的 schema URL 参数提取
  */
 export function getUrlFromSchema(url: string): string {
+  if (process.env.NODE_ENV === 'development') {
+    if (/^dbdc-dev:\/\//.test(url)) {
+      return getUrlFromDBDCSchema(url);
+    }
+  }
   if (/^odc:\/\//.test(url)) {
     return getParamsFromODCSchema(url);
   }

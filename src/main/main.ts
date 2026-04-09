@@ -38,6 +38,8 @@ import { injectTokenToLocalStorage } from './utils/token-injection';
 import { openMainWebWindow } from './windows/mainWeb';
 import startScreen from './windows/startScreen';
 import { setupTabEvents } from './tabs/events';
+import { TabManager } from './tabs/TabManager';
+import path from 'path';
 
 Sentry.init({
   dsn: 'https://859452cf23044aeda8677a8bdcc53081@obc-sentry.oceanbase.com/3',
@@ -81,10 +83,13 @@ if (setting && Object.keys(setting).includes('client.electron.params')) {
  *
  * 需要从 argv 中找到 dbdc:// 协议 URL
  */
-function resolveWinRemoteParams(argv, mainWindow = null) {
+function resolveWinRemoteParams(
+  argv,
+  mainWindow = null,
+): { resolved: boolean; fullUrl?: string; hash?: string } {
   if (!argv || argv.length === 0) {
     log.info('[resolveWinRemoteParams] No argv provided');
-    return;
+    return { resolved: false };
   }
 
   log.info('[resolveWinRemoteParams] argv:', argv);
@@ -98,7 +103,9 @@ function resolveWinRemoteParams(argv, mainWindow = null) {
     log.info('[resolveWinRemoteParams] Found schema URL:', schemaUrl);
 
     try {
-      const fullUrl = getUrlFromSchema(schemaUrl);
+      const rawUrl = getUrlFromSchema(schemaUrl);
+      // 补全协议前缀，确保 loadURL 能正常工作
+      const fullUrl = /^https?:\/\//.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
       log.info('[resolveWinRemoteParams] Extracted full URL:', fullUrl);
 
       const params = parseUrlParams(fullUrl);
@@ -112,7 +119,8 @@ function resolveWinRemoteParams(argv, mainWindow = null) {
 
       // 解析完整 URL 并设置 pathname 和 hash
       try {
-        const urlObj = new URL(fullUrl);
+        // fullUrl 可能缺少协议（如 www.github.com/），补全后再解析
+        const urlObj = new URL(/^https?:\/\//.test(fullUrl) ? fullUrl : `https://${fullUrl}`);
         // 设置 pathname（包含路径部分）
         PathnameStore.setPathname(urlObj.pathname);
         // 设置 hash（包含 # 及之后的内容）
@@ -130,14 +138,14 @@ function resolveWinRemoteParams(argv, mainWindow = null) {
         injectTokenToLocalStorage(mainWindow, params.token);
       }
 
-      return true; // 成功解析
+      return { resolved: true, fullUrl, hash: params.hash };
     } catch (error) {
       log.error('[resolveWinRemoteParams] Error processing schema URL:', error);
-      return false;
+      return { resolved: false };
     }
   } else {
     log.info('[resolveWinRemoteParams] No schema URL found in argv');
-    return false;
+    return { resolved: false };
   }
 }
 
@@ -154,6 +162,13 @@ uptime: ${os.uptime()}
 mem: ${os.totalmem()}
 cpu: ${JSON.stringify(os.cpus())}
 version: ${pkg?.version}`);
+
+if (app.isPackaged) {
+  app.setAsDefaultProtocolClient('dbdc');
+} else {
+  log.info('APP Start (app.isPackaged):', process.execPath, path.resolve(process.argv[3]));
+  app.setAsDefaultProtocolClient('dbdc-dev', process.execPath, [path.resolve(process.argv[3])]);
+}
 
 if (!gotTheLock) {
   log.info('app get lock fail');
@@ -183,16 +198,28 @@ async function initApp() {
 
       // Windows 下，点击 dbdc://xxx 链接会把 URL 作为参数传递
       // argv 格式: ['electron.exe路径', 'dbdc://http://...']
-      const resolved = resolveWinRemoteParams(argv, activeWindow);
+      const result = resolveWinRemoteParams(argv, activeWindow);
 
-      if (resolved && MainServer.getInstance().status == 'ready') {
-        log.info('[second-instance] Server ready, focusing window');
-        // 聚焦到现有窗口而不是创建新窗口
-        if (activeWindow) {
-          if (activeWindow.isMinimized()) activeWindow.restore();
-          activeWindow.focus();
+      if (result.resolved && activeWindow) {
+        log.info('[second-instance] Protocol URL resolved, opening new tab');
+
+        // 聚焦窗口
+        if (activeWindow.isMinimized()) activeWindow.restore();
+        activeWindow.focus();
+
+        // 用解析到的 URL 创建新标签页并激活
+        const tabManager = TabManager.getInstance();
+        if (tabManager.mainWindow) {
+          // 拼接最终要加载的 URL：协议提取后的完整地址
+          const finalUrl = result.fullUrl || '';
+          if (finalUrl) {
+            log.info('[second-instance] Creating tab with URL:', finalUrl);
+            tabManager.createTab(finalUrl, { isActive: true });
+          }
+        } else {
+          log.info('[second-instance] TabManager not initialized yet');
         }
-      } else if (!resolved) {
+      } else if (!result.resolved) {
         log.info('[second-instance] No protocol URL found, ignoring');
       }
     }
@@ -241,17 +268,6 @@ async function initApp() {
         .join(' | ')}`,
     );
 
-    /**
-     * 注册自定义协议（必须在 ready 之后调用）
-     * 注意：在开发环境中，这只能处理已运行应用的 second-instance 事件
-     * 要让系统识别 dbdc:// 协议，需要运行注册脚本配置注册表
-     */
-    if (process.platform === 'win32') {
-      const registered = app.setAsDefaultProtocolClient('dbdc');
-      log.info('[Ready] register dbdc:// protocol for Windows, result:', registered);
-    }
-    // macOS: 在 Info.plist 中配置协议 (CFBundleURLTypes)
-
     if (process.platform === 'darwin') {
       createMenu(app);
       setAboutPanelOptions(app);
@@ -259,8 +275,17 @@ async function initApp() {
     }
 
     // 处理启动时的参数（如果是通过 dbdc:// 协议启动的）
-    resolveWinRemoteParams(process.argv);
+    const startResult = resolveWinRemoteParams(process.argv);
     createNewMainWeb();
+
+    // 如果是通过协议首次启动，在窗口创建后再打开新标签页
+    if (startResult.resolved && startResult.fullUrl) {
+      const tabManager = TabManager.getInstance();
+      if (tabManager.mainWindow) {
+        log.info('[Ready] Opening tab for protocol URL:', startResult.fullUrl);
+        tabManager.createTab(startResult.fullUrl, { isActive: true });
+      }
+    }
   });
 
   /**
@@ -359,8 +384,11 @@ async function initApp() {
     event.preventDefault(); // 阻止默认行为
     log.info('app open-url:', urlStr);
 
+    let openUrl: string | undefined;
+
     if (urlStr && isSchemaUrl(urlStr)) {
-      const fullUrl = getUrlFromSchema(urlStr);
+      const rawUrl = getUrlFromSchema(urlStr);
+      const fullUrl = /^https?:\/\//.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
       const params = parseUrlParams(fullUrl);
 
       log.info('[open-url] fullUrl:', fullUrl);
@@ -373,7 +401,7 @@ async function initApp() {
 
       // 解析完整 URL 并设置 pathname 和 hash
       try {
-        const urlObj = new URL(fullUrl);
+        const urlObj = new URL(/^https?:\/\//.test(fullUrl) ? fullUrl : `https://${fullUrl}`);
         PathnameStore.setPathname(urlObj.pathname);
         PathnameStore.setHash(urlObj.hash);
         log.info('[open-url] Set pathname:', urlObj.pathname);
@@ -382,12 +410,29 @@ async function initApp() {
         log.error('[open-url] Failed to parse URL:', e);
         PathnameStore.addParams(fullUrl);
       }
+
+      openUrl = fullUrl;
     }
 
     const instance = MainServer.getInstance();
     if (instance.status == 'ready') {
-      log.info('app open-url(ready and open new window)');
-      createNewMainWeb();
+      const windows = BrowserWindow.getAllWindows();
+      const activeWindow = windows.length > 0 ? windows[0] : null;
+
+      if (activeWindow && openUrl) {
+        // 聚焦窗口并在新标签页中打开 URL
+        if (activeWindow.isMinimized()) activeWindow.restore();
+        activeWindow.focus();
+
+        const tabManager = TabManager.getInstance();
+        if (tabManager.mainWindow) {
+          log.info('[open-url] Creating tab with URL:', openUrl);
+          tabManager.createTab(openUrl, { isActive: true });
+        }
+      } else {
+        log.info('[open-url] No protocol URL, opening new window');
+        createNewMainWeb();
+      }
     }
   });
 }
