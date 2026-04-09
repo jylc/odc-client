@@ -52,6 +52,9 @@ const currentPanel = computed(() => {
   height: 100vh;
   background: #ffffff;
   -webkit-app-region: drag;
+  /* 窗口边框 - 灰色描边 + 外阴影 */
+  border: 1px solid #b0b0b0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
 .settings-body {

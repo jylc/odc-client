@@ -58,13 +58,28 @@ const onClose = () => {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-width: 100px;
-  max-width: 200px;
-  flex-shrink: 0;
+  /* Base width - will be overridden by TabBar's overflow styles */
+  min-width: 80px;
+  max-width: 240px;
   color: #666666;
   font-size: 14px;
   -webkit-app-region: no-drag;
   gap: 6px;
+}
+
+/* 分隔线 */
+.tab-item::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  width: 1px;
+  height: 16px;
+  background-color: #d0d0d0;
+}
+
+/* 最后一个标签不需要分隔线 */
+.tab-item:last-child::after {
+  display: none;
 }
 
 .tab-item:hover {

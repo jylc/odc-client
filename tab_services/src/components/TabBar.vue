@@ -1,6 +1,10 @@
 <template>
   <div class="tab-bar" @dblclick="onDoubleClickBar">
-    <div class="tabs-container">
+    <div
+      ref="tabsContainerRef"
+      class="tabs-container"
+      :class="{ overflowing: isOverflowing }"
+    >
         <TabItem
           v-for="tab in tabs"
           :key="tab.id"
@@ -74,7 +78,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { Tooltip as ATooltip } from 'ant-design-vue'
 import {
   PlusOutlined,
@@ -114,6 +118,11 @@ const emit = defineEmits<{
 
 // Window maximized state
 const isMaximized = ref(false)
+
+	// Track if tabs container is overflowing
+	const isOverflowing = ref(false)
+	const tabsContainerRef = ref<HTMLElement | null>(null)
+	let resizeObserver: ResizeObserver | null = null
 
 // Debounce flag for settings button to prevent multiple clicks
 const isOpeningSettings = ref(false)
@@ -285,6 +294,15 @@ onMounted(() => {
   console.log('[TabBar] window.electron?.tab:', !!window.electron?.tab)
   console.log('[TabBar] window.electron?.windowControl:', !!window.electron?.windowControl)
   checkMaximizeState()
+
+  // Set up ResizeObserver to detect overflow
+  if (tabsContainerRef.value) {
+    resizeObserver = new ResizeObserver(checkOverflow)
+    resizeObserver.observe(tabsContainerRef.value)
+  }
+
+  // Initial check
+  nextTick(() => checkOverflow())
 })
 
 onUnmounted(() => {
@@ -293,7 +311,38 @@ onUnmounted(() => {
     clearTimeout(settingsOpenTimer)
     settingsOpenTimer = null
   }
+
+  // Clean up ResizeObserver
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
 })
+
+// Check overflow when tabs change
+watch(() => props.tabs, () => {
+  nextTick(() => checkOverflow())
+}, { deep: true })
+
+/**
+ * Check if tabs container is overflowing
+ */
+function checkOverflow() {
+  if (!tabsContainerRef.value) return
+
+  const container = tabsContainerRef.value
+  const scrollWidth = container.scrollWidth
+  const clientWidth = container.clientWidth
+
+  // Consider overflowing if scroll width exceeds client width by more than 1px
+  isOverflowing.value = scrollWidth > clientWidth + 1
+
+  console.log('[TabBar] Overflow check:', {
+    scrollWidth,
+    clientWidth,
+    isOverflowing: isOverflowing.value
+  })
+}
 </script>
 
 <style scoped>
@@ -491,5 +540,21 @@ onUnmounted(() => {
 
 .tabs-container::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.25);
+}
+</style>
+
+<!-- Non-scoped styles to control TabItem behavior based on container overflow -->
+<style>
+/* When NOT overflowing: tabs can grow and adapt */
+.tabs-container:not(.overflowing) .tab-item {
+  max-width: 200px;
+  flex: 1 1 auto;
+}
+
+/* When overflowing: tabs use fixed width to enable scrolling */
+.tabs-container.overflowing .tab-item {
+  flex: 0 0 auto;
+  min-width: 120px;
+  max-width: 180px;
 }
 </style>

@@ -25,6 +25,7 @@ export class TabManager implements ITabManager {
   private tabStore: TabStore;
   private eventEmitter: Map<string, Set<Function>>;
   private tabBarHeight: number = 40; // Default tab bar height
+  private borderWidth: number = 1; // Window border width for CSS border
   private initialUrl: string | null = null; // Store initial URL for first tab
   private devToolsEnabled: boolean = false; // Track if DevTools should be auto-opened
   private devToolsTabs: Set<string> = new Set(); // Track tabs with DevTools open
@@ -256,6 +257,15 @@ export class TabManager implements ITabManager {
   private handleTabEvent(event: string, data: any): void {
     log.debug(`[TabManager] Received tab event: ${event}`, data);
 
+    // Handle new window request - create a new tab instead of opening a new window
+    if (event === 'tab:new-window-request') {
+      log.info('[TabManager] New window request, creating new tab:', data.url);
+      this.createTab(data.url, {
+        title: data.frameName || undefined,
+      });
+      return; // Don't broadcast this event to renderer
+    }
+
     // Track DevTools state
     if (event === 'devtools:opened') {
       this.devToolsTabs.add(data.tabId);
@@ -279,8 +289,17 @@ export class TabManager implements ITabManager {
       }
     }
 
+    // Transform data format for TAB_UPDATED and TAB_LOADED events
+    // TabContainer sends: { tabId, url, canGoBack, canGoForward, ... }
+    // Renderer expects: { tabId, updates: { url, canGoBack, canGoForward, ... } }
+    let transformedData = data;
+    if (event === 'tab:updated' || event === 'tab:loaded') {
+      const { tabId, ...updates } = data;
+      transformedData = { tabId, updates };
+    }
+
     // Broadcast to renderer
-    this.sendToRenderer(event, data);
+    this.sendToRenderer(event, transformedData);
 
     // Also emit locally for any internal listeners
     this.emit(event, data);
@@ -416,11 +435,13 @@ export class TabManager implements ITabManager {
     }
 
     const [width, height] = this.mainWindow.getSize();
+    // Offset BrowserView by border width to expose the CSS border on all sides
+    const bw = this.borderWidth;
     return {
-      x: 0,
+      x: bw,
       y: this.tabBarHeight,
-      width,
-      height: height - this.tabBarHeight,
+      width: width - bw * 2,
+      height: height - this.tabBarHeight - bw,
     };
   }
 

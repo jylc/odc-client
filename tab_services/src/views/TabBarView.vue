@@ -169,11 +169,12 @@ function setupEventListeners(): void {
   })
   unsubscribers.push(unsubClosed)
 
-  // Tab updated (URL, title, etc.)
+  // Tab updated (URL, title, navigation state, etc.)
   const unsubUpdated = tabService.subscribe(TAB_EVENTS.TAB_UPDATED, (data: { tabId: string; updates: Partial<TabInfo> }) => {
     console.log('[TabService] Tab updated:', data.tabId, data.updates)
     const index = tabs.value.findIndex((t) => t.id === data.tabId)
     if (index !== -1) {
+      // Merge updates directly - data.updates already contains canGoBack, canGoForward, url, etc.
       tabs.value[index] = { ...tabs.value[index], ...data.updates }
     }
   })
@@ -207,12 +208,14 @@ function setupEventListeners(): void {
   unsubscribers.push(unsubLoading)
 
   // Tab loaded
-  const unsubLoaded = tabService.subscribe(TAB_EVENTS.TAB_LOADED, (data: { tabId: string; isLoading?: boolean; url?: string; title?: string }) => {
+  const unsubLoaded = tabService.subscribe(TAB_EVENTS.TAB_LOADED, (data: { tabId: string; isLoading?: boolean; url?: string; title?: string; canGoBack?: boolean; canGoForward?: boolean }) => {
     const index = tabs.value.findIndex((t) => t.id === data.tabId)
     if (index !== -1) {
       const updates: Partial<TabInfo> = { isLoading: false }
       if (data.url) updates.url = data.url
       if (data.title) updates.title = data.title
+      if (data.canGoBack !== undefined) updates.canGoBack = data.canGoBack
+      if (data.canGoForward !== undefined) updates.canGoForward = data.canGoForward
       tabs.value[index] = { ...tabs.value[index], ...updates }
     }
   })

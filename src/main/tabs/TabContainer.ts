@@ -42,6 +42,7 @@ export class TabContainer implements ITabContainer {
   private currentBounds: TabBounds;
   private isDestroyed: boolean = false;
   private eventCallback: TabEventCallback | null = null;
+  private wasLocalUrl: boolean = false; // Track initial URL type for security boundary detection
 
   constructor(url: string, id?: string) {
     this.id = id || generateTabId();
@@ -51,11 +52,19 @@ export class TabContainer implements ITabContainer {
     this.isLoading = false;
     this.currentBounds = { x: 0, y: 0, width: 0, height: 0 };
 
+    // Determine security settings based on URL
+    // Local/trusted content: enable Node.js for ODC functionality
+    // Remote/untrusted content: disable Node.js for security
+    const isLocalContent = this.isLocalUrl(url);
+    this.wasLocalUrl = isLocalContent; // Track initial URL type
+
     this.browserView = new BrowserView({
       webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false,
-        webSecurity: false,
+        nodeIntegration: isLocalContent,
+        contextIsolation: !isLocalContent,
+        webSecurity: !isLocalContent,
+        // Always enable sandbox for better security
+        sandbox: !isLocalContent,
       },
     });
 
@@ -65,6 +74,49 @@ export class TabContainer implements ITabContainer {
     this.loadURL(url).catch((error) => {
       log.error(`[Tab ${this.id}] Failed to load initial URL:`, error);
     });
+
+    if (isLocalContent) {
+      log.info(`[Tab ${this.id}] Created with Node.js enabled for local content: ${url}`);
+    } else {
+      log.info(`[Tab ${this.id}] Created with Node.js disabled for remote content: ${url}`);
+    }
+  }
+
+  /**
+   * Check if URL is local/trusted content that requires Node.js integration
+   */
+  private isLocalUrl(url: string): boolean {
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname.toLowerCase();
+
+      // Localhost variants
+      if (
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname === '0.0.0.0' ||
+        hostname === '[::1]'
+      ) {
+        return true;
+      }
+
+      // Local network ranges (optional - uncomment if needed)
+      // if (hostname.startsWith('192.168.') ||
+      //     hostname.startsWith('10.') ||
+      //     hostname.startsWith('172.')) {
+      //   return true;
+      // }
+
+      // about:blank for new tabs
+      if (urlObj.protocol === 'about:') {
+        return true;
+      }
+
+      return false;
+    } catch {
+      // Invalid URL, treat as local (could be about:blank)
+      return true;
+    }
   }
 
   /**
@@ -111,6 +163,29 @@ export class TabContainer implements ITabContainer {
   private setupBrowserViewEvents(): void {
     const webContents = this.browserView.webContents;
 
+    // Intercept new window requests (e.g., target="_blank" links, window.open())
+    // and redirect to open in a new tab instead
+    webContents.setWindowOpenHandler(({ url, frameName, features, disposition }) => {
+      log.info(`[Tab ${this.id}] New window request intercepted:`, {
+        url,
+        frameName,
+        features,
+        disposition,
+      });
+
+      // For all new window requests (popup, new window, background tab, etc.)
+      // emit an event to create a new tab instead of opening a new window
+      this.emitEvent('tab:new-window-request', {
+        url,
+        frameName,
+        features,
+        disposition,
+      });
+
+      // Prevent the default behavior (opening a new window)
+      return { action: 'deny' };
+    });
+
     webContents.on('did-start-loading', () => {
       if (this.isDestroyed) return;
       this.isLoading = true;
@@ -143,10 +218,15 @@ export class TabContainer implements ITabContainer {
       this.url = webContents.getURL();
       this.title = this.extractTitleFromUrl(this.url);
       log.info(`[Tab ${this.id}] Finished loading: ${this.url}`);
+
+      // Include navigation state when page finishes loading
+      const tabInfo = this.getTabInfo();
       this.emitEvent(TAB_EVENTS.TAB_LOADED, {
         isLoading: false,
         url: this.url,
         title: this.title,
+        canGoBack: tabInfo.canGoBack,
+        canGoForward: tabInfo.canGoForward,
       });
     });
 
@@ -180,13 +260,33 @@ export class TabContainer implements ITabContainer {
     webContents.on('did-navigate', (event, url) => {
       if (this.isDestroyed) return;
       this.url = url;
-      this.emitEvent(TAB_EVENTS.TAB_UPDATED, { url });
+
+      // Include navigation state (canGoBack, canGoForward) in the update
+      const tabInfo = this.getTabInfo();
+      this.emitEvent(TAB_EVENTS.TAB_UPDATED, {
+        url,
+        canGoBack: tabInfo.canGoBack,
+        canGoForward: tabInfo.canGoForward,
+      });
+
+      // Track security boundary changes
+      if (this.wasLocalUrl && !this.isLocalUrl(url)) {
+        log.warn(`[Tab ${this.id}] SECURITY WARNING: Navigated from local to remote URL: ${url}`);
+      }
+      this.wasLocalUrl = this.isLocalUrl(url);
     });
 
     webContents.on('did-navigate-in-page', (event, url) => {
       if (this.isDestroyed) return;
       this.url = url;
-      this.emitEvent(TAB_EVENTS.TAB_UPDATED, { url });
+
+      // Include navigation state (canGoBack, canGoForward) in the update
+      const tabInfo = this.getTabInfo();
+      this.emitEvent(TAB_EVENTS.TAB_UPDATED, {
+        url,
+        canGoBack: tabInfo.canGoBack,
+        canGoForward: tabInfo.canGoForward,
+      });
     });
 
     // Track DevTools state changes
