@@ -170,12 +170,28 @@ function setupEventListeners(): void {
   unsubscribers.push(unsubClosed)
 
   // Tab updated (URL, title, navigation state, etc.)
+  // Debounce rapid updates (e.g. during SSO redirects) to avoid excessive re-renders
+  const pendingUpdates = new Map<string, Partial<TabInfo>>()
+  let updateTimer: ReturnType<typeof setTimeout> | null = null
+
+  const flushUpdates = () => {
+    updateTimer = null
+    pendingUpdates.forEach((updates, tabId) => {
+      const index = tabs.value.findIndex((t) => t.id === tabId)
+      if (index !== -1) {
+        tabs.value[index] = { ...tabs.value[index], ...updates }
+      }
+    })
+    pendingUpdates.clear()
+  }
+
   const unsubUpdated = tabService.subscribe(TAB_EVENTS.TAB_UPDATED, (data: { tabId: string; updates: Partial<TabInfo> }) => {
-    console.log('[TabService] Tab updated:', data.tabId, data.updates)
-    const index = tabs.value.findIndex((t) => t.id === data.tabId)
-    if (index !== -1) {
-      // Merge updates directly - data.updates already contains canGoBack, canGoForward, url, etc.
-      tabs.value[index] = { ...tabs.value[index], ...data.updates }
+    // Accumulate latest updates per tab, only flush on idle
+    const existing = pendingUpdates.get(data.tabId)
+    pendingUpdates.set(data.tabId, { ...existing, ...data.updates })
+
+    if (!updateTimer) {
+      updateTimer = setTimeout(flushUpdates, 50)
     }
   })
   unsubscribers.push(unsubUpdated)
@@ -429,6 +445,12 @@ onMounted(() => {
 onUnmounted(() => {
   // Clean up event listeners
   unsubscribers.forEach((unsub) => unsub())
+  // Clean up debounce timer
+  if (updateTimer) {
+    clearTimeout(updateTimer)
+    updateTimer = null
+  }
+  pendingUpdates.clear()
 })
 </script>
 

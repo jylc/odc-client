@@ -62,8 +62,7 @@ export function parseUrlParams(urlString: string): {
   hash: string;
 } {
   try {
-    // new URL() 要求完整协议，缺少协议时补全 https
-    const url = new URL(/^https?:\/\//.test(urlString) ? urlString : `https://${urlString}`);
+    const url = new URL(urlString);
     const hash = url.hash;
 
     // 从 hash 中解析 query 参数

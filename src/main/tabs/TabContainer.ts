@@ -278,6 +278,8 @@ export class TabContainer implements ITabContainer {
 
     webContents.on('did-navigate-in-page', (event, url) => {
       if (this.isDestroyed) return;
+      // Skip if URL hasn't actually changed to avoid redundant events
+      if (this.url === url) return;
       this.url = url;
 
       // Include navigation state (canGoBack, canGoForward) in the update

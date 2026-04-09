@@ -104,8 +104,7 @@ function resolveWinRemoteParams(
 
     try {
       const rawUrl = getUrlFromSchema(schemaUrl);
-      // 补全协议前缀，确保 loadURL 能正常工作
-      const fullUrl = /^https?:\/\//.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+      const fullUrl = rawUrl;
       log.info('[resolveWinRemoteParams] Extracted full URL:', fullUrl);
 
       const params = parseUrlParams(fullUrl);
@@ -119,8 +118,7 @@ function resolveWinRemoteParams(
 
       // 解析完整 URL 并设置 pathname 和 hash
       try {
-        // fullUrl 可能缺少协议（如 www.github.com/），补全后再解析
-        const urlObj = new URL(/^https?:\/\//.test(fullUrl) ? fullUrl : `https://${fullUrl}`);
+        const urlObj = new URL(fullUrl);
         // 设置 pathname（包含路径部分）
         PathnameStore.setPathname(urlObj.pathname);
         // 设置 hash（包含 # 及之后的内容）
@@ -388,7 +386,7 @@ async function initApp() {
 
     if (urlStr && isSchemaUrl(urlStr)) {
       const rawUrl = getUrlFromSchema(urlStr);
-      const fullUrl = /^https?:\/\//.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+      const fullUrl = rawUrl;
       const params = parseUrlParams(fullUrl);
 
       log.info('[open-url] fullUrl:', fullUrl);
@@ -401,7 +399,7 @@ async function initApp() {
 
       // 解析完整 URL 并设置 pathname 和 hash
       try {
-        const urlObj = new URL(/^https?:\/\//.test(fullUrl) ? fullUrl : `https://${fullUrl}`);
+        const urlObj = new URL(fullUrl);
         PathnameStore.setPathname(urlObj.pathname);
         PathnameStore.setHash(urlObj.hash);
         log.info('[open-url] Set pathname:', urlObj.pathname);
