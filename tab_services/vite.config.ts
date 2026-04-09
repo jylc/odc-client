@@ -12,7 +12,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     watch: {
-      ignored: ['**/node_modules/**', '**/dist/**', '**/.pnpm-store/**'],
+      ignored: ['**/node_modules/**', '**/dist/**', '**/.pnpm-store/**', '.pnpm-store/**'],
     },
   },
 });

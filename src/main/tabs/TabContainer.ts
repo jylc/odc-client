@@ -309,12 +309,29 @@ export class TabContainer implements ITabContainer {
     this.isDestroyed = true;
 
     try {
-      // Remove webContents event listeners
-      this.browserView.webContents.removeAllListeners();
+      const webContents = this.browserView.webContents;
+
+      // Close DevTools first if open to free additional memory
+      // DevTools runs in a separate process and must be explicitly closed
+      if (webContents.isDevToolsOpened()) {
+        webContents.closeDevTools();
+        log.info(`[Tab ${this.id}] DevTools closed during destroy`);
+      }
+
+      // Remove all event listeners to prevent memory leaks
+      // This prevents callbacks from firing on destroyed objects
+      webContents.removeAllListeners();
+
+      // CRITICAL: Destroy webContents to free memory and stop renderer process
+      // The webContents object maintains a renderer process that consumes memory
+      // Calling destroy() properly cleans up the process and releases resources
+      (webContents as any).destroy();
+      log.info(`[Tab ${this.id}] webContents destroyed, renderer process terminated`);
     } catch (error) {
-      log.warn(`[Tab ${this.id}] Error removing listeners:`, error);
+      log.warn(`[Tab ${this.id}] Error during cleanup:`, error);
     }
 
     this.isActive = false;
+    log.info(`[Tab ${this.id}] Tab fully destroyed and memory freed`);
   }
 }

@@ -44,7 +44,10 @@
     "start": "max dev",
     "start-electron": "electron --inspect=5858 -w ./dist/main/main.js",
     "test": "max test",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "offline:pack": "node scripts/pack-offline-deps.cjs",
+    "offline:install": "node scripts/install-offline-deps.cjs",
+    "offline:verify": "node scripts/verify-offline-deps.cjs"
   },
   "lint-staged": {
     "*.{js,jsx,less,md,json}": [

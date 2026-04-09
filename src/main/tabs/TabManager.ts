@@ -29,7 +29,7 @@ export class TabManager implements ITabManager {
   private devToolsEnabled: boolean = false; // Track if DevTools should be auto-opened
   private devToolsTabs: Set<string> = new Set(); // Track tabs with DevTools open
   private rightCtrlPressCount: number = 0; // Track right Ctrl press count for DevTools toggle
-  private rightCtrlPressTimer: NodeJS.Timeout | null = null; // Timer for resetting Ctrl press count
+  private rightCtrlPressTimestamp: number = 0; // Timestamp of last Ctrl press for timeout detection
 
   public mainWindow: BrowserWindow | null = null;
   public tabs: Map<string, ITabContainer> = new Map();
@@ -81,18 +81,16 @@ export class TabManager implements ITabManager {
     this.mainWindow.webContents.on('before-input-event', (event, input) => {
       // Check for right Control key (location === 2 indicates right key)
       if (input.key === 'Control' && input.location === 2 && input.type === 'keyDown') {
+        const now = Date.now();
         log.info('[TabManager] Right Ctrl pressed');
-        this.rightCtrlPressCount++;
 
-        // Clear previous timer if exists
-        if (this.rightCtrlPressTimer) {
-          clearTimeout(this.rightCtrlPressTimer);
+        // Check if more than 500ms has passed since last press, reset count
+        if (now - this.rightCtrlPressTimestamp > 500) {
+          this.rightCtrlPressCount = 0;
         }
 
-        // Set timer to reset count after 500ms
-        this.rightCtrlPressTimer = setTimeout(() => {
-          this.rightCtrlPressCount = 0;
-        }, 500);
+        this.rightCtrlPressTimestamp = now;
+        this.rightCtrlPressCount++;
 
         // If pressed 3 times within 500ms, toggle DevTools
         if (this.rightCtrlPressCount === 3) {
@@ -109,10 +107,6 @@ export class TabManager implements ITabManager {
             log.warn('[TabManager] No active tab to toggle DevTools');
           }
           this.rightCtrlPressCount = 0;
-          if (this.rightCtrlPressTimer) {
-            clearTimeout(this.rightCtrlPressTimer);
-            this.rightCtrlPressTimer = null;
-          }
         }
       }
     });
@@ -528,11 +522,9 @@ export class TabManager implements ITabManager {
       listeners.clear();
     });
 
-    // Clear the Ctrl press timer
-    if (this.rightCtrlPressTimer) {
-      clearTimeout(this.rightCtrlPressTimer);
-      this.rightCtrlPressTimer = null;
-    }
+    // Reset Ctrl press tracking
+    this.rightCtrlPressCount = 0;
+    this.rightCtrlPressTimestamp = 0;
 
     this.activeTabId = null;
     this.mainWindow = null;
