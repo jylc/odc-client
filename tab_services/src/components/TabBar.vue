@@ -126,7 +126,7 @@ const isMaximized = ref(false)
 
 // Debounce flag for settings button to prevent multiple clicks
 const isOpeningSettings = ref(false)
-let settingsOpenTimer: NodeJS.Timeout | null = null
+let settingsOpenTimer: ReturnType<typeof setTimeout> | null = null
 
 const onTabSelect = (id: string) => {
   emit('select', id)

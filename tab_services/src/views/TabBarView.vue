@@ -53,6 +53,10 @@ const activeTabId = ref<string>('')
 // Unsubscribe functions for cleanup
 const unsubscribers: (() => void)[] = []
 
+// Debounce state for tab updates
+const pendingUpdates = new Map<string, Partial<TabInfo>>()
+let updateTimer: ReturnType<typeof setTimeout> | null = null
+
 // Computed property for current tab
 const currentTab = computed(() => {
   return tabs.value.find((tab) => tab.id === activeTabId.value) || null
@@ -171,9 +175,6 @@ function setupEventListeners(): void {
 
   // Tab updated (URL, title, navigation state, etc.)
   // Debounce rapid updates (e.g. during SSO redirects) to avoid excessive re-renders
-  const pendingUpdates = new Map<string, Partial<TabInfo>>()
-  let updateTimer: ReturnType<typeof setTimeout> | null = null
-
   const flushUpdates = () => {
     updateTimer = null
     pendingUpdates.forEach((updates, tabId) => {

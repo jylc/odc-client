@@ -99,10 +99,20 @@ export class TabManager implements ITabManager {
           if (activeTab) {
             if (activeTab.isDevToolsOpened()) {
               activeTab.closeDevTools();
+              // If all tabs have DevTools closed, disable auto-open for new tabs
+              this.devToolsTabs.delete(activeTab.id);
+              if (this.devToolsTabs.size === 0) {
+                this.devToolsEnabled = false;
+                log.info(`[TabManager] DevTools auto-open disabled (all tabs closed)`);
+              }
               log.info(`[TabManager] DevTools closed via triple Ctrl for tab: ${activeTab.id}`);
             } else {
               activeTab.openDevTools();
-              log.info(`[TabManager] DevTools opened via triple Ctrl for tab: ${activeTab.id}`);
+              // Enable auto-open for new tabs when user manually opens DevTools
+              this.devToolsEnabled = true;
+              log.info(
+                `[TabManager] DevTools opened via triple Ctrl for tab: ${activeTab.id}, auto-open enabled`,
+              );
             }
           } else {
             log.warn('[TabManager] No active tab to toggle DevTools');
@@ -269,9 +279,10 @@ export class TabManager implements ITabManager {
     // Track DevTools state
     if (event === 'devtools:opened') {
       this.devToolsTabs.add(data.tabId);
-    } else if (event === 'devtools:closed') {
-      this.devToolsTabs.delete(data.tabId);
     }
+    // Don't delete from devToolsTabs on devtools:closed during navigation
+    // TabContainer handles reopen via devToolsWasOpen flag. Only clear on
+    // explicit user close (triple Ctrl) or tab destroy.
     // Reopen DevTools immediately when DOM is ready (before page fully loads)
     else if (event === 'dom-ready' && this.devToolsEnabled) {
       const tabId = data.tabId;
@@ -368,6 +379,14 @@ export class TabManager implements ITabManager {
     // Destroy tab
     tab.destroy();
     this.tabs.delete(tabId);
+
+    // Remove from DevTools tracking
+    this.devToolsTabs.delete(tabId);
+    // If no tabs have DevTools open, disable auto-open for new tabs
+    if (this.devToolsTabs.size === 0) {
+      this.devToolsEnabled = false;
+      log.info(`[TabManager] DevTools auto-open disabled (all tabs closed)`);
+    }
 
     log.info(`[TabManager] Closed tab ${tabId}`);
 

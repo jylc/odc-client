@@ -55,7 +55,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Checkbox as ACheckbox, Button as AButton } from 'ant-design-vue'
-import { ReloadOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue'
+import { ReloadOutlined } from '@ant-design/icons-vue'
 import PanelHeader from './PanelHeader.vue'
 import { updateService, UPDATE_EVENTS } from '../services/updateService'
 import { appLinks } from '../config/links'

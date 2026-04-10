@@ -43,6 +43,7 @@ export class TabContainer implements ITabContainer {
   private isDestroyed: boolean = false;
   private eventCallback: TabEventCallback | null = null;
   private wasLocalUrl: boolean = false; // Track initial URL type for security boundary detection
+  private devToolsWasOpen: boolean = false; // Track DevTools state to reopen after navigation
 
   constructor(url: string, id?: string) {
     this.id = id || generateTabId();
@@ -189,10 +190,12 @@ export class TabContainer implements ITabContainer {
     webContents.on('did-start-loading', () => {
       if (this.isDestroyed) return;
       this.isLoading = true;
+      // Remember DevTools state before it closes, so we can reopen after navigation
+      this.devToolsWasOpen = this.isDevToolsOpened();
       // Close DevTools before page reload to avoid disconnect message
-      if (this.isDevToolsOpened()) {
+      if (this.devToolsWasOpen) {
         this.closeDevTools();
-        log.info(`[Tab ${this.id}] DevTools closed before reload`);
+        log.info(`[Tab ${this.id}] DevTools closed before reload (will reopen)`);
       }
       log.info(`[Tab ${this.id}] Started loading: ${this.url}`);
       this.emitEvent(TAB_EVENTS.TAB_LOADING, { isLoading: true });
@@ -202,6 +205,16 @@ export class TabContainer implements ITabContainer {
     webContents.on('dom-ready', () => {
       if (this.isDestroyed) return;
       log.info(`[Tab ${this.id}] DOM ready`);
+      // Reopen DevTools if it was open before navigation
+      if (this.devToolsWasOpen) {
+        try {
+          this.openDevTools();
+          log.info(`[Tab ${this.id}] DevTools reopened after navigation`);
+        } catch (error) {
+          log.error(`[Tab ${this.id}] Failed to reopen DevTools:`, error);
+        }
+        this.devToolsWasOpen = false;
+      }
       this.emitEvent('dom-ready', {});
     });
 
@@ -299,6 +312,8 @@ export class TabContainer implements ITabContainer {
 
     webContents.on('devtools-closed', () => {
       log.info(`[Tab ${this.id}] DevTools closed`);
+      // Don't reset devToolsWasOpen here - it may have been set by did-start-loading
+      // to indicate DevTools should reopen after navigation. It will be reset in dom-ready.
       this.emitEvent('devtools:closed', {});
     });
 

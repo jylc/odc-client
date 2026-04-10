@@ -70,7 +70,7 @@ export interface ElectronWindowControlAPI {
   unmaximize: () => Promise<{ success: boolean }>;
   isMaximized: () => Promise<{ success: boolean; isMaximized: boolean }>;
   close: () => Promise<{ success: boolean }>;
-  openSettings: () => Promise<{ success: boolean }>;
+  openSettings: () => Promise<{ success: boolean; alreadyOpen?: boolean }>;
 }
 
 /**
@@ -89,12 +89,20 @@ export interface ElectronUpdateAPI {
   on: (event: string, callback: (data: any) => void) => () => void;
 }
 
+/**
+ * Shell API interface (exposed via preload.js)
+ */
+export interface ElectronShellAPI {
+  openExternal: (url: string) => Promise<void>;
+}
+
 declare global {
   interface Window {
     electron: {
       tab: ElectronTabAPI;
       windowControl: ElectronWindowControlAPI;
       update: ElectronUpdateAPI;
+      shell: ElectronShellAPI;
     };
   }
 }

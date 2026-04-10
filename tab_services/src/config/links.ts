@@ -27,9 +27,9 @@ export function getAppLinks(): AppLinks {
       return (window as any).appConfig.links as AppLinks;
     }
 
-    // Try to read from package.json during development
-    if (process.env.NODE_ENV === 'development') {
-      // In dev mode, these are already configured in package.json
+    // In dev mode, these are already configured in package.json
+    // Use import.meta.env for Vite builds
+    if (import.meta.env.DEV) {
       return defaultLinks;
     }
 
