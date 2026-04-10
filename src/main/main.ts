@@ -238,9 +238,9 @@ async function initApp() {
   async function createNewMainWeb() {
     log.info('create new main web');
     let mainWindow = startScreen();
-    let mainServer = MainServer.getInstance();
-    //await mainServer.startServer();
-    log.info('create new main web(server start success)');
+    const mainServer = MainServer.getInstance();
+
+    // 先打开窗口展示首页，不等待服务器启动
     mainWindow = openMainWebWindow(mainWindow);
     log.info('create new main web(window opened)');
 
@@ -252,6 +252,16 @@ async function initApp() {
      */
     setupTabEvents(mainWindow);
     log.info('create new main web(tab events set up)');
+
+    // 后台启动服务器，不阻塞窗口展示
+    mainServer
+      .startServer()
+      .then(() => {
+        log.info('create new main web(server started in background)');
+      })
+      .catch((error) => {
+        log.error('create new main web(server start failed):', error);
+      });
   }
 
   /**
