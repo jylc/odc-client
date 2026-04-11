@@ -254,14 +254,16 @@ async function initApp() {
     log.info('create new main web(tab events set up)');
 
     // 后台启动服务器，不阻塞窗口展示
-    mainServer
-      .startServer()
-      .then(() => {
-        log.info('create new main web(server started in background)');
-      })
-      .catch((error) => {
-        log.error('create new main web(server start failed):', error);
-      });
+    if (process.env.NODE_ENV !== 'development') {
+      mainServer
+        .startServer()
+        .then(() => {
+          log.info('create new main web(server started in background)');
+        })
+        .catch((error) => {
+          log.error('create new main web(server start failed):', error);
+        });
+    }
   }
 
   /**

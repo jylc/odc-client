@@ -41,7 +41,9 @@
       "Bash(rm -rf node_modules)",
       "Bash(node scripts/install-offline-deps.cjs)",
       "Bash(rm:*)",
-      "Bash(grep -l \"binding-win32\" \"E:/Projects/Web/odc-client/tab_services/offline-deps/pnpm-store/v10/index/\"*/*)"
+      "Bash(grep -l \"binding-win32\" \"E:/Projects/Web/odc-client/tab_services/offline-deps/pnpm-store/v10/index/\"*/*)",
+      "Bash(xargs file:*)",
+      "Bash(find src:*)"
     ]
   }
 }

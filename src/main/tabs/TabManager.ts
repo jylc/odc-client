@@ -97,9 +97,14 @@ export class TabManager implements ITabManager {
         if (this.rightCtrlPressCount === 3) {
           const activeTab = this.getActiveTab();
           if (activeTab) {
-            if (activeTab.isDevToolsOpened()) {
-              activeTab.closeDevTools();
-              // If all tabs have DevTools closed, disable auto-open for new tabs
+            // Use devToolsTabs to determine user intent, not isDevToolsOpened()
+            // isDevToolsOpened() may be false during navigation even though user
+            // previously opened DevTools (did-start-loading closes it temporarily)
+            const shouldClose = this.devToolsTabs.has(activeTab.id);
+            if (shouldClose) {
+              if (activeTab.isDevToolsOpened()) {
+                activeTab.closeDevTools();
+              }
               this.devToolsTabs.delete(activeTab.id);
               if (this.devToolsTabs.size === 0) {
                 this.devToolsEnabled = false;
@@ -108,7 +113,6 @@ export class TabManager implements ITabManager {
               log.info(`[TabManager] DevTools closed via triple Ctrl for tab: ${activeTab.id}`);
             } else {
               activeTab.openDevTools();
-              // Enable auto-open for new tabs when user manually opens DevTools
               this.devToolsEnabled = true;
               log.info(
                 `[TabManager] DevTools opened via triple Ctrl for tab: ${activeTab.id}, auto-open enabled`,
@@ -280,25 +284,8 @@ export class TabManager implements ITabManager {
     if (event === 'devtools:opened') {
       this.devToolsTabs.add(data.tabId);
     }
-    // Don't delete from devToolsTabs on devtools:closed during navigation
-    // TabContainer handles reopen via devToolsWasOpen flag. Only clear on
-    // explicit user close (triple Ctrl) or tab destroy.
-    // Reopen DevTools immediately when DOM is ready (before page fully loads)
-    else if (event === 'dom-ready' && this.devToolsEnabled) {
-      const tabId = data.tabId;
-      if (this.devToolsTabs.has(tabId)) {
-        const tab = this.tabs.get(tabId);
-        if (tab) {
-          // Open immediately without delay - DOM is ready
-          try {
-            tab.openDevTools();
-            log.info(`[TabManager] DevTools reopened on dom-ready for tab: ${tabId}`);
-          } catch (error) {
-            log.error(`[TabManager] Failed to reopen DevTools:`, error);
-          }
-        }
-      }
-    }
+    // TabContainer handles DevTools reopen during navigation via devToolsShouldStayOpen flag.
+    // Only clear devToolsTabs on explicit user close (triple Ctrl) or tab destroy.
 
     // Transform data format for TAB_UPDATED and TAB_LOADED events
     // TabContainer sends: { tabId, url, canGoBack, canGoForward, ... }
