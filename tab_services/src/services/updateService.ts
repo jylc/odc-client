@@ -65,6 +65,41 @@ export const updateService = {
     return getUpdateAPI().getConfig();
   },
 
+  async getReleaseNotes(): Promise<{ releaseNotes: string; version: string }> {
+    if (!isElectron) {
+      return { releaseNotes: '', version: '' };
+    }
+    return getUpdateAPI().getReleaseNotes();
+  },
+
+  async hotfixDownload(): Promise<{ success: boolean }> {
+    if (!isElectron) {
+      return { success: false };
+    }
+    return getUpdateAPI().hotfixDownload();
+  },
+
+  async hotfixStatus(): Promise<{ status: string; version?: string }> {
+    if (!isElectron) {
+      return { status: 'idle' };
+    }
+    return getUpdateAPI().hotfixStatus();
+  },
+
+  async downloadStatus(): Promise<{ state: string; updateType?: string; version?: string }> {
+    if (!isElectron) {
+      return { state: 'idle' };
+    }
+    return getUpdateAPI().downloadStatus();
+  },
+
+  async restartApp(): Promise<void> {
+    if (!isElectron) {
+      return;
+    }
+    return getUpdateAPI().restartApp();
+  },
+
   subscribe(event: string, callback: (data: any) => void): () => void {
     if (!isElectron) {
       return () => {};

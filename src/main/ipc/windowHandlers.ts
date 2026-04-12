@@ -21,6 +21,8 @@ import { TabManager } from '../tabs';
 
 // Track the settings window to prevent multiple instances
 let settingsWindow: BrowserWindow | null = null;
+// Track the update modal window
+let updateModalWindow: BrowserWindow | null = null;
 
 /**
  * Register all IPC handlers for window control operations
@@ -208,6 +210,90 @@ export function registerWindowHandlers(): void {
     }
   });
 
+  /**
+   * Open update modal as a child window (not covered by tab BrowserViews)
+   * Channel: window:open-update-modal
+   * Params: { version: string, releaseNotes?: string }
+   */
+  ipcMain.handle('window:open-update-modal', async (_event, data: { version: string; releaseNotes?: string }) => {
+    try {
+      const tabManager = TabManager.getInstance();
+      const mainWindow = tabManager.mainWindow;
+      if (!mainWindow) {
+        return { success: false, error: 'No main window' };
+      }
+
+      // If update modal already exists, focus it
+      if (updateModalWindow && !updateModalWindow.isDestroyed()) {
+        updateModalWindow.focus();
+        return { success: true, alreadyOpen: true };
+      }
+
+      const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
+      const queryParams = new URLSearchParams({
+        version: data.version,
+        releaseNotes: data.releaseNotes || '',
+      });
+      const updateUrl = isDev
+        ? `http://localhost:5173/#/update?${queryParams.toString()}`
+        : `file://${path.join(process.resourcesPath, 'tab_services', 'index.html')}#/update?${queryParams.toString()}`;
+
+      updateModalWindow = new BrowserWindow({
+        width: 460,
+        height: 420,
+        modal: true,
+        parent: mainWindow,
+        frame: false,
+        resizable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        show: false,
+        autoHideMenuBar: true,
+        webPreferences: {
+          preload: path.join(
+            process.env.NODE_ENV === 'development' ? process.cwd() : process.resourcesPath || '',
+            'libraries/script',
+            'preload.js',
+          ),
+          nodeIntegration: false,
+          contextIsolation: true,
+          webSecurity: false,
+        },
+      });
+
+      updateModalWindow.setMenu(null);
+
+      // Center on parent window
+      const [parentWidth, parentHeight] = mainWindow.getSize();
+      const [parentX, parentY] = mainWindow.getPosition();
+      const [w, h] = updateModalWindow.getSize();
+      updateModalWindow.setPosition(
+        Math.round(parentX + (parentWidth - w) / 2),
+        Math.round(parentY + (parentHeight - h) / 2),
+      );
+
+      updateModalWindow.once('ready-to-show', () => {
+        updateModalWindow?.show();
+      });
+
+      updateModalWindow.loadURL(updateUrl).catch((e) => {
+        log.error('[WindowHandlers] Failed to load update modal page:', e);
+      });
+
+      updateModalWindow.on('closed', () => {
+        updateModalWindow = null;
+      });
+
+      log.info('[WindowHandlers] Update modal window opened');
+      return { success: true };
+    } catch (error) {
+      log.error('[WindowHandlers] open-update-modal error:', error);
+      updateModalWindow = null;
+      return { success: false, error: String(error) };
+    }
+  });
+
   log.info('[WindowHandlers] All window IPC handlers registered');
 }
 
@@ -222,6 +308,7 @@ export function unregisterWindowHandlers(): void {
     'window:isMaximized',
     'window:close',
     'window:open-settings',
+    'window:open-update-modal',
   ];
 
   channels.forEach((channel) => {

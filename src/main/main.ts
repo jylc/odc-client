@@ -276,6 +276,20 @@ async function initApp() {
         .join(' | ')}`,
     );
 
+    // Apply pending hotfix BEFORE any windows are created
+    // This ensures files are not locked and UpdateService reads the new version
+    try {
+      const { HotUpdateService } = await import('./updater/HotUpdateService');
+      const hotfixService = HotUpdateService.getInstance();
+      const pendingHotfix = hotfixService.hasPendingHotfix();
+      if (pendingHotfix.pending) {
+        log.info(`[Ready] Applying pending hotfix: ${pendingHotfix.version}`);
+        hotfixService.applyPendingHotfix();
+      }
+    } catch (error) {
+      log.error('[Ready] Failed to apply pending hotfix:', error);
+    }
+
     if (process.platform === 'darwin') {
       createMenu(app);
       setAboutPanelOptions(app);

@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import fs from 'fs';
 import originalFs from 'original-fs';
 import path from 'path';
@@ -259,6 +259,14 @@ export class HotUpdateService {
         log.info('[HotUpdateService] Replaced tab_services directory');
       }
 
+      // Replace version.json (so next update check uses the new version)
+      const stagingVersionJson = path.join(stagingDir, 'version.json');
+      if (fs.existsSync(stagingVersionJson)) {
+        const targetVersionJson = path.join(this.resourcesPath, 'version.json');
+        fs.copyFileSync(stagingVersionJson, targetVersionJson);
+        log.info('[HotUpdateService] Replaced version.json');
+      }
+
       // Note: app.asar (main process) cannot be replaced while running on Windows
       // Main process changes require a major update (full installer)
 
@@ -313,17 +321,17 @@ export class HotUpdateService {
   }
 
   /**
-   * Send IPC event to renderer process
+   * Send IPC event to all renderer processes (main window + settings window etc.)
    */
   private sendToRenderer(channel: string, data: any): void {
     try {
-      const tabManager = TabManager.getInstance();
-      const mainWindow = tabManager.mainWindow;
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(channel, data);
+      const windows = BrowserWindow.getAllWindows();
+      for (const win of windows) {
+        if (win && !win.isDestroyed()) {
+          win.webContents.send(channel, data);
+        }
       }
     } catch (error) {
-      // TabManager might not be initialized yet during startup
       log.debug('[HotUpdateService] Could not send to renderer:', error);
     }
   }

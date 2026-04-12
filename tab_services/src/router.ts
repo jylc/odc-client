@@ -12,6 +12,11 @@ const routes: RouteRecordRaw[] = [
     name: 'settings',
     component: () => import('./views/SettingsView.vue'),
   },
+  {
+    path: '/update',
+    name: 'update',
+    component: () => import('./views/UpdateModalView.vue'),
+  },
 ];
 
 const router = createRouter({

@@ -21,7 +21,7 @@ import log from '../../utils/log';
 import { downloadEvent } from './event';
 import { TabManager } from '../../tabs';
 import { registerTabHandlers, registerWindowHandlers, registerUpdateHandlers } from '../../ipc';
-import { UpdateService, HotUpdateService } from '../../updater';
+import { UpdateService } from '../../updater';
 
 // Tab bar height constant (matches tab_service)
 // 44px TabBar (border-box, includes 1px border-bottom) + 40px UrlBar (border-box, includes 1px border-bottom) = 84px
@@ -108,14 +108,6 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
   });
 
   PathnameStore.reset();
-
-  // Apply pending hotfix on startup (before resources are locked)
-  const hotfixService = HotUpdateService.getInstance();
-  const pendingHotfix = hotfixService.hasPendingHotfix();
-  if (pendingHotfix.pending) {
-    log.info(`[MainWindow] Applying pending hotfix: ${pendingHotfix.version}`);
-    hotfixService.applyPendingHotfix();
-  }
 
   // Check for updates after a delay (don't block startup)
   // Then start periodic check every 2 hours

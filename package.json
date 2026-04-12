@@ -1,6 +1,6 @@
 {
   "name": "odc",
-  "version": "4.4.0",
+  "version": "4.3.0",
   "private": true,
   "description": "企业级数据开发平台",
   "homepage": "https://www.oceanbase.com/",
@@ -16,16 +16,13 @@
     "help": "https://www.oceanbase.com/docs/",
     "update": "https://www.oceanbase.com/download/"
   },
-  "releaseNotes": {
-    "4.4.0": "1. 新增 dbdc 协议支持和 token 参数处理\n2. 添加离线依赖打包与安装功能\n3. 重构服务器停止逻辑和应用退出处理\n4. 添加 Electron 热更新功能"
-  },
   "scripts": {
     "install-odc": "node ./scripts/rename.js && pnpm install --registry=https://registry.npmmirror.com",
     "analyze": "ANALYZE=1 cross-env NODE_OPTIONS=--max_old_space_size=8192 max build",
     "build-main-dev": "cross-env NODE_OPTIONS=--max_old_space_size=8192 NODE_ENV=development webpack -w --config ./build/webpack.main.config.js",
     "build-main-prod": "cross-env NODE_OPTIONS=--max_old_space_size=8192 NODE_ENV=production webpack --config ./build/webpack.main.prod.config.js",
     "build:tab-service": "cd tab_services && pnpm install && pnpm build",
-    "build:client": "npm run build:tab-service && node scripts/plugin/initPlugins.js && cross-env NODE_OPTIONS=--max_old_space_size=8192 UMI_ENV=client npm run build:odc && npm run build-main-prod",
+    "build:client": "npm run build:tab-service && node scripts/plugin/initPlugins.js && cross-env NODE_OPTIONS=--max_old_space_size=8192 UMI_ENV=client npm run build:odc && npm run build-main-prod && node -e \"const pkg=require('./package.json');const fs=require('fs');const notes=fs.existsSync('release-note.md')?fs.readFileSync('release-note.md','utf-8').trim():'';fs.writeFileSync('dist/version.json',JSON.stringify({version:pkg.version,releaseNotes:notes},null,2))\"",
     "build:odc": "node scripts/plugin/initPlugins.js && cross-env NODE_OPTIONS=--max_old_space_size=8192 max build",
     "cov": "max test --coverage",
     "dev": "node scripts/plugin/initPlugins.js && cross-env NODE_OPTIONS=--max_old_space_size=8192 max dev",

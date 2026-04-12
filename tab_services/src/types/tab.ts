@@ -88,6 +88,11 @@ export interface ElectronUpdateAPI {
   install: () => Promise<{ success: boolean }>;
   getVersion: () => Promise<{ version: string }>;
   getConfig: () => Promise<{ links: { home: string; help: string; update: string } }>;
+  getReleaseNotes: () => Promise<{ releaseNotes: string; version: string }>;
+  hotfixDownload: () => Promise<{ success: boolean; error?: string }>;
+  hotfixStatus: () => Promise<{ status: string; version?: string }>;
+  downloadStatus: () => Promise<{ state: string; updateType?: string; version?: string }>;
+  restartApp: () => Promise<void>;
   on: (event: string, callback: (data: any) => void) => () => void;
 }
 

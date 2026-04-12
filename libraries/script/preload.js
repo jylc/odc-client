@@ -57,6 +57,11 @@ contextBridge.exposeInMainWorld('electron', {
     install: () => ipcRenderer.invoke('update:install'),
     getVersion: () => ipcRenderer.invoke('update:get-version'),
     getConfig: () => ipcRenderer.invoke('update:get-config'),
+    getReleaseNotes: () => ipcRenderer.invoke('update:get-release-notes'),
+    hotfixDownload: () => ipcRenderer.invoke('update:hotfix-download'),
+    hotfixStatus: () => ipcRenderer.invoke('update:hotfix-status'),
+    downloadStatus: () => ipcRenderer.invoke('update:download-status'),
+    restartApp: () => ipcRenderer.invoke('update:restart-app'),
     on: (event, callback) => {
       const listener = (e, data) => callback(data);
       ipcRenderer.on(event, listener);

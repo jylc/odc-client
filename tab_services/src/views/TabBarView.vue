@@ -21,18 +21,6 @@
       @reload="onReload"
       @stop="onStop"
     />
-    <UpdateModal
-      :visible="updateModalVisible"
-      :state="updateModalState"
-      :update-info="updateModalInfo"
-      :progress="updateProgress"
-      :error-message="updateError"
-      @skip="onUpdateSkip"
-      @download="onUpdateDownload"
-      @install="onUpdateInstall"
-      @later="onUpdateLater"
-      @close="onUpdateClose"
-    />
   </div>
 </template>
 
@@ -40,9 +28,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import TabBar from '../components/TabBar.vue'
 import UrlBar from '../components/UrlBar.vue'
-import UpdateModal from '../components/UpdateModal.vue'
 import { tabService, TAB_EVENTS } from '../services/tabService'
-import { updateService, UPDATE_EVENTS } from '../services/updateService'
 import { appLinks } from '../config/links'
 import type { TabInfo } from '../types/tab'
 
@@ -72,13 +58,6 @@ const displayTabs = computed(() => {
     favicon: tab.favicon,
   }))
 })
-
-// Update modal state
-const updateModalVisible = ref(false)
-const updateModalState = ref<'available' | 'downloading' | 'downloaded' | 'error'>('available')
-const updateModalInfo = ref<{ version: string; releaseNotes?: string; updateType?: 'major' | 'minor' }>({ version: '' })
-const updateProgress = ref(0)
-const updateError = ref('')
 
 // Tab bar height constant
 const TAB_BAR_HEIGHT = 84 // 44px TabBar + 40px UrlBar (both border-box)
@@ -237,40 +216,6 @@ function setupEventListeners(): void {
     }
   })
   unsubscribers.push(unsubLoaded)
-
-  // Update events
-  const unsubUpdateAvailable = updateService.subscribe(UPDATE_EVENTS.UPDATE_AVAILABLE, (data: { version: string; releaseNotes?: string; updateType?: 'major' | 'minor' }) => {
-    console.log('[TabBarView] Update available:', data.version, 'type:', data.updateType)
-
-    // Minor updates (hotfix) are handled silently in the main process
-    // Only show modal for major updates (full installer)
-    if (data.updateType === 'minor') {
-      console.log('[TabBarView] Minor update (hotfix) - handled silently in background')
-      return
-    }
-
-    // Major update - show update modal
-    updateModalInfo.value = { version: data.version, releaseNotes: data.releaseNotes, updateType: data.updateType }
-    updateModalState.value = 'available'
-    updateModalVisible.value = true
-  })
-  unsubscribers.push(unsubUpdateAvailable)
-
-  const unsubUpdateProgress = updateService.subscribe(UPDATE_EVENTS.UPDATE_PROGRESS, (data: { progress: number }) => {
-    updateProgress.value = data.progress
-  })
-  unsubscribers.push(unsubUpdateProgress)
-
-  const unsubUpdateDownloaded = updateService.subscribe(UPDATE_EVENTS.UPDATE_DOWNLOADED, () => {
-    updateModalState.value = 'downloaded'
-  })
-  unsubscribers.push(unsubUpdateDownloaded)
-
-  const unsubUpdateError = updateService.subscribe(UPDATE_EVENTS.UPDATE_ERROR, (data: { message: string }) => {
-    updateError.value = data.message
-    updateModalState.value = 'error'
-  })
-  unsubscribers.push(unsubUpdateError)
 }
 
 /**
@@ -418,31 +363,6 @@ async function onStop(): Promise<void> {
   if (tabService.isAvailable()) {
     await tabService.stop()
   }
-}
-
-/**
- * Update modal handlers
- */
-function onUpdateSkip() {
-  updateModalVisible.value = false
-}
-
-async function onUpdateDownload() {
-  updateModalState.value = 'downloading'
-  updateProgress.value = 0
-  await updateService.download()
-}
-
-async function onUpdateInstall() {
-  await updateService.install()
-}
-
-function onUpdateLater() {
-  updateModalVisible.value = false
-}
-
-function onUpdateClose() {
-  updateModalVisible.value = false
 }
 
 // Lifecycle hooks
