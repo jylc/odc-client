@@ -57,7 +57,11 @@
       "Bash(grep -oE '.{0,100}toString.{0,100}' main.js)",
       "Bash(grep -oE '.{0,100}getInstance\\\\\\(\\\\\\)\\\\.port.{0,100}' main.js)",
       "Bash(grep -oE '.{0,300}class ie\\\\b.{0,300}' main.js)",
-      "Bash(grep -oE 'ie=.{0,300}' main.js)"
+      "Bash(grep -oE 'ie=.{0,300}' main.js)",
+      "Bash(npx -y @affaan-m/ecc@latest mcp --help)",
+      "Bash(npx -y everything-claude-code mcp --help)",
+      "Bash(node \"C:\\\\Users\\\\wxb17\\\\.claude\\\\plugins\\\\marketplaces\\\\ecc\\\\dist\\\\index.js\" mcp --help)",
+      "Bash(node:*)"
     ]
   },
   "enabledPlugins": {}
