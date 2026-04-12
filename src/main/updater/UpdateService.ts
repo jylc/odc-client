@@ -17,6 +17,8 @@ type ReleaseNoteInfo = { note?: string; [key: string]: any };
 // Configure autoUpdater behavior (safe to set at module level)
 autoUpdater.autoDownload = false; // Manual download trigger
 autoUpdater.autoInstallOnAppQuit = false; // Manual install trigger
+// Skip signature verification for unsigned installers (development/testing)
+(autoUpdater as any).verifyUpdateCodeSignature = async () => null;
 
 export interface RemoteUpdateInfo {
   version: string;
@@ -252,7 +254,7 @@ export class UpdateService {
    * Check for updates by querying the server directly
    * Does not rely on electron-updater's internal version comparison
    */
-  async checkForUpdate(): Promise<RemoteUpdateInfo | null> {
+  async checkForUpdate(showModal: boolean = false): Promise<RemoteUpdateInfo | null> {
     if (this.state === 'checking' || this.state === 'downloading') {
       log.warn('[UpdateService] Update check already in progress');
       return null;
@@ -296,6 +298,12 @@ export class UpdateService {
         releaseNotes: remoteInfo.releaseNotes,
         updateType: this.updateType,
       });
+
+      // Open update modal for major updates (only on automatic background checks)
+      if (showModal && this.updateType === 'major') {
+        log.info('[UpdateService] Major update detected, opening update modal window');
+        this.openUpdateModalWindow(remoteInfo.version, remoteInfo.releaseNotes || '');
+      }
 
       // Auto-trigger hotfix download for minor updates (background check)
       if (this.updateType === 'minor') {
@@ -413,7 +421,7 @@ export class UpdateService {
   /**
    * Download the major update installer.
    * In packed mode: uses autoUpdater (handles NSIS installer correctly).
-   * In dev mode: falls back to HTTP download.
+   * In dev mode or on autoUpdater failure: falls back to HTTP download.
    */
   async downloadUpdate(): Promise<boolean> {
     if (this.state !== 'available' || !this.updateInfo) {
@@ -422,6 +430,7 @@ export class UpdateService {
     }
 
     this.state = 'downloading';
+    this.downloadedInstallerPath = null; // Reset for fresh download
 
     if (app.isPackaged) {
       // Production: use autoUpdater to download (handles NSIS installer path correctly)
@@ -431,12 +440,20 @@ export class UpdateService {
         if (checkResult) {
           await autoUpdater.downloadUpdate();
           // 'update-downloaded' event from setupAutoUpdaterListeners() will set state='downloaded'
-          return true;
+          // If state is still 'downloading' or changed to 'error', check event result
+          if ((this.state as UpdateState) === 'downloaded') {
+            return true;
+          }
+          // autoUpdater download failed (signature error etc.), fall through to HTTP
+          log.warn('[UpdateService] autoUpdater did not reach downloaded state, trying HTTP fallback');
+        } else {
+          log.warn('[UpdateService] autoUpdater found no update, falling back to HTTP');
         }
-        log.warn('[UpdateService] autoUpdater found no update, falling back to HTTP');
       } catch (error) {
         log.error('[UpdateService] autoUpdater download failed, trying HTTP fallback:', error);
       }
+
+      this.state = 'downloading'; // Reset state for HTTP attempt
     }
 
     // Dev mode or autoUpdater failure: HTTP fallback
@@ -486,8 +503,8 @@ export class UpdateService {
 
   /**
    * Install the downloaded update.
-   * In packed mode: uses autoUpdater.quitAndInstall() (correct NSIS install path).
-   * In dev mode: runs the downloaded installer via exec + app.exit().
+   * - If autoUpdater downloaded: uses autoUpdater.quitAndInstall()
+   * - If HTTP fallback downloaded: runs installer via exec + app.exit()
    */
   async installUpdate(): Promise<void> {
     if (this.state !== 'downloaded') {
@@ -496,14 +513,15 @@ export class UpdateService {
     }
 
     try {
-      if (app.isPackaged) {
+      // Use autoUpdater only when it was the one that downloaded (no HTTP fallback path)
+      if (app.isPackaged && !this.downloadedInstallerPath) {
         log.info('[UpdateService] Using autoUpdater.quitAndInstall()');
         // Remove will-quit handler to prevent cleanup logic from blocking exit
         // autoUpdater.quitAndInstall() needs the app to quit cleanly
         app.removeAllListeners('will-quit');
         autoUpdater.quitAndInstall();
       } else {
-        // Dev mode fallback: run downloaded installer and exit
+        // HTTP fallback or dev mode: run downloaded installer and exit
         const installerPath = this.downloadedInstallerPath;
         if (installerPath && fs.existsSync(installerPath)) {
           log.info(`[UpdateService] Launching installer: ${installerPath}`);
@@ -514,6 +532,7 @@ export class UpdateService {
           });
           setTimeout(() => {
             log.info('[UpdateService] Exiting app for installer to proceed');
+            app.removeAllListeners('will-quit');
             app.exit(0);
           }, 1500);
         } else {
@@ -599,7 +618,6 @@ export class UpdateService {
         win.webContents.send(channel, data);
       }
     }
-    log.debug(`[UpdateService] Sent IPC '${channel}' to ${windows.length} window(s)`);
   }
 
   /**
@@ -616,7 +634,7 @@ export class UpdateService {
     this.periodicCheckTimer = setInterval(() => {
       if (this.state === 'idle' || this.state === 'error') {
         log.info('[UpdateService] Periodic check triggered');
-        this.checkForUpdate().catch((error) => {
+        this.checkForUpdate(true).catch((error) => {
           log.error('[UpdateService] Periodic check failed:', error);
         });
       } else {

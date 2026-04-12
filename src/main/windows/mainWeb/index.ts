@@ -113,7 +113,7 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
   // Then start periodic check every 2 hours
   const updateService = UpdateService.getInstance();
   setTimeout(() => {
-    updateService.checkForUpdate().catch((error) => {
+    updateService.checkForUpdate(true).catch((error) => {
       log.error('[MainWindow] Auto update check failed:', error);
     });
     // Start periodic check (every 2 hours)

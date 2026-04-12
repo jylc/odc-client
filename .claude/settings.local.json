@@ -59,5 +59,6 @@
       "Bash(grep -oE '.{0,300}class ie\\\\b.{0,300}' main.js)",
       "Bash(grep -oE 'ie=.{0,300}' main.js)"
     ]
-  }
+  },
+  "enabledPlugins": {}
 }
