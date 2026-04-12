@@ -34,7 +34,6 @@ import {
   getUrlFromSchema,
 } from './utils';
 import log from './utils/log';
-import { injectTokenToLocalStorage } from './utils/token-injection';
 import { openMainWebWindow } from './windows/mainWeb';
 import startScreen from './windows/startScreen';
 import { setupTabEvents } from './tabs/events';
@@ -133,7 +132,6 @@ function resolveWinRemoteParams(
 
       // 如果窗口已就绪，立即注入 token
       if (mainWindow && params.token) {
-        injectTokenToLocalStorage(mainWindow, params.token);
       }
 
       return { resolved: true, fullUrl, hash: params.hash };

@@ -81,11 +81,13 @@ export interface ElectronUpdateAPI {
     hasUpdate: boolean;
     version?: string;
     releaseNotes?: string;
+    updateType?: 'major' | 'minor';
     error?: string;
   }>;
   download: () => Promise<{ success: boolean; error?: string }>;
   install: () => Promise<{ success: boolean }>;
   getVersion: () => Promise<{ version: string }>;
+  getConfig: () => Promise<{ links: { home: string; help: string; update: string } }>;
   on: (event: string, callback: (data: any) => void) => () => void;
 }
 

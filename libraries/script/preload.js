@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('electron', {
     download: () => ipcRenderer.invoke('update:download'),
     install: () => ipcRenderer.invoke('update:install'),
     getVersion: () => ipcRenderer.invoke('update:get-version'),
+    getConfig: () => ipcRenderer.invoke('update:get-config'),
     on: (event, callback) => {
       const listener = (e, data) => callback(data);
       ipcRenderer.on(event, listener);

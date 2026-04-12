@@ -148,7 +148,7 @@ export function registerWindowHandlers(): void {
       const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
       const settingsUrl = isDev
         ? 'http://localhost:5173/#/settings'
-        : `file://${path.join(app.getAppPath(), 'tab_service', 'dist', 'index.html')}#/settings`;
+        : `file://${path.join(process.resourcesPath, 'tab_services', 'index.html')}#/settings`;
 
       settingsWindow = new BrowserWindow({
         width: 640,

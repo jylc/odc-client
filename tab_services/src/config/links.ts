@@ -1,5 +1,5 @@
 /*
- * Link configuration from package.json
+ * Link configuration - loaded from main process via IPC or from defaults
  */
 
 export interface AppLinks {
@@ -8,36 +8,56 @@ export interface AppLinks {
   update: string;
 }
 
+// Default links (fallback)
+const defaultLinks: AppLinks = {
+  home: 'https://www.oceanbase.com/',
+  help: 'https://www.oceanbase.com/docs/',
+  update: 'https://www.oceanbase.com/download/',
+};
+
 /**
- * Get app links from package.json
- * In development, reads from root package.json
- * In production, reads from app's package.json
+ * Get app links synchronously (returns cached or default values)
  */
 export function getAppLinks(): AppLinks {
-  // Default links (fallback)
-  const defaultLinks: AppLinks = {
-    home: 'https://www.oceanbase.com/',
-    help: 'https://www.oceanbase.com/docs/',
-    update: 'https://www.oceanbase.com/download/',
-  };
+  // Return cached links if available
+  if (cachedLinks) {
+    return cachedLinks;
+  }
 
   try {
     // Try to get links from window.appConfig if available (injected by main process)
     if ((window as any).appConfig?.links) {
       return (window as any).appConfig.links as AppLinks;
     }
-
-    // In dev mode, these are already configured in package.json
-    // Use import.meta.env for Vite builds
-    if (import.meta.env.DEV) {
-      return defaultLinks;
-    }
-
-    return defaultLinks;
   } catch (error) {
-    console.warn('[links] Failed to load app links, using defaults:', error);
-    return defaultLinks;
+    console.warn('[links] Failed to read appConfig:', error);
   }
+
+  return defaultLinks;
 }
 
+let cachedLinks: AppLinks | null = null;
+
+/**
+ * Load links from main process via IPC (async)
+ * Falls back to defaults if IPC is not available
+ */
+export async function loadAppLinks(): Promise<AppLinks> {
+  try {
+    const isElectron = typeof window !== 'undefined' && !!window.electron?.update;
+    if (isElectron) {
+      const config = await (window as any).electron.update.getConfig();
+      if (config?.links) {
+        cachedLinks = config.links;
+        return cachedLinks!;
+      }
+    }
+  } catch (error) {
+    console.warn('[links] Failed to load links from main process:', error);
+  }
+
+  return defaultLinks;
+}
+
+// Initialize with defaults, can be updated later via loadAppLinks()
 export const appLinks = getAppLinks();

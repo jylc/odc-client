@@ -16,6 +16,9 @@
     "help": "https://www.oceanbase.com/docs/",
     "update": "https://www.oceanbase.com/download/"
   },
+  "releaseNotes": {
+    "4.4.0": "1. 新增 dbdc 协议支持和 token 参数处理\n2. 添加离线依赖打包与安装功能\n3. 重构服务器停止逻辑和应用退出处理\n4. 添加 Electron 热更新功能"
+  },
   "scripts": {
     "install-odc": "node ./scripts/rename.js && pnpm install --registry=https://registry.npmmirror.com",
     "analyze": "ANALYZE=1 cross-env NODE_OPTIONS=--max_old_space_size=8192 max build",
@@ -79,7 +82,8 @@
     "myers-diff": "^2.1.0",
     "qs": "^6.10.1",
     "request": "^2.88.0",
-    "tree-kill": "^1.2.1"
+    "tree-kill": "^1.2.1",
+    "adm-zip": "^0.5.5"
   },
   "devDependencies": {
     "@ant-design/icons": "^4.0.0",
@@ -92,6 +96,7 @@
     "@oceanbase-odc/ob-react-data-grid": "^4.1.0",
     "@sentry/react": "^7.88.0",
     "@testing-library/react": "^11.2.2",
+    "@types/adm-zip": "^0.5.8",
     "@types/antlr4": "~4.7.2",
     "@types/archiver": "^7.0.0",
     "@types/cheerio": "^0.22.31",
@@ -106,7 +111,6 @@
     "@types/request": "^2.48.7",
     "@umijs/fabric": "^3.0.0",
     "@umijs/max": "^4.4.12",
-    "adm-zip": "^0.5.5",
     "ahooks": "^2.9.0",
     "ali-oss": "^6.17.1",
     "antd": "^5.23.4",

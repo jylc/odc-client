@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import log from '../utils/log';
-import { UpdateService } from '../updater';
+import { UpdateService, getUpdaterConfig } from '../updater';
 
 /**
  * Register all IPC handlers for update operations
@@ -11,7 +11,7 @@ export function registerUpdateHandlers(): void {
   /**
    * Check for updates
    * Channel: update:check
-   * Returns: { hasUpdate: boolean, version?: string, releaseNotes?: string }
+   * Returns: { hasUpdate: boolean, version?: string, releaseNotes?: string, updateType?: string }
    */
   ipcMain.handle('update:check', async () => {
     try {
@@ -21,6 +21,7 @@ export function registerUpdateHandlers(): void {
           hasUpdate: true,
           version: updateInfo.version,
           releaseNotes: updateInfo.releaseNotes,
+          updateType: updateService.getUpdateType(),
         };
       }
       return { hasUpdate: false };
@@ -31,7 +32,7 @@ export function registerUpdateHandlers(): void {
   });
 
   /**
-   * Download the available update
+   * Download the available update (major updates only)
    * Channel: update:download
    * Returns: { success: boolean }
    */
@@ -69,6 +70,18 @@ export function registerUpdateHandlers(): void {
     return { version: updateService.getCurrentVersion() };
   });
 
+  /**
+   * Get updater configuration (links, etc.)
+   * Channel: update:get-config
+   * Returns: { links: { home, help, update } }
+   */
+  ipcMain.handle('update:get-config', async () => {
+    const config = getUpdaterConfig();
+    return {
+      links: config.links,
+    };
+  });
+
   log.info('[UpdateHandlers] All update IPC handlers registered');
 }
 
@@ -76,7 +89,13 @@ export function registerUpdateHandlers(): void {
  * Unregister all update IPC handlers
  */
 export function unregisterUpdateHandlers(): void {
-  const channels = ['update:check', 'update:download', 'update:install', 'update:get-version'];
+  const channels = [
+    'update:check',
+    'update:download',
+    'update:install',
+    'update:get-version',
+    'update:get-config',
+  ];
 
   channels.forEach((channel) => {
     ipcMain.removeHandler(channel);

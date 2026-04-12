@@ -4,6 +4,8 @@
 
 export { UPDATE_EVENTS } from '../types/update';
 
+import type { UpdaterConfig } from '../types/update';
+
 const isElectron = typeof window !== 'undefined' && !!window.electron?.update;
 
 function getUpdateAPI() {
@@ -15,7 +17,12 @@ export const updateService = {
     return isElectron;
   },
 
-  async check(): Promise<{ hasUpdate: boolean; version?: string; releaseNotes?: string }> {
+  async check(): Promise<{
+    hasUpdate: boolean;
+    version?: string;
+    releaseNotes?: string;
+    updateType?: 'major' | 'minor';
+  }> {
     if (!isElectron) {
       console.warn('[updateService] Not in Electron');
       return { hasUpdate: false };
@@ -43,6 +50,19 @@ export const updateService = {
     }
     const result = await getUpdateAPI().getVersion();
     return result.version;
+  },
+
+  async getConfig(): Promise<UpdaterConfig> {
+    if (!isElectron) {
+      return {
+        links: {
+          home: 'https://www.oceanbase.com/',
+          help: 'https://www.oceanbase.com/docs/',
+          update: 'https://www.oceanbase.com/download/',
+        },
+      };
+    }
+    return getUpdateAPI().getConfig();
   },
 
   subscribe(event: string, callback: (data: any) => void): () => void {

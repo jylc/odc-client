@@ -37,7 +37,9 @@ export class PathnameStore {
       slashes: true,
       hostname: PathnameStore.hostname,
       port:
-        process.env.NODE_ENV === 'development' ? '8000' : MainServer.getInstance().port.toString(),
+        process.env.NODE_ENV === 'development'
+          ? '8000'
+          : MainServer.getInstance().port?.toString() ?? '',
     });
     log.info('renderer url: ', href);
     return href;

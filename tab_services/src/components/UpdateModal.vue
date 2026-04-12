@@ -8,18 +8,21 @@
     :mask-closable="false"
     class="update-modal"
   >
-    <!-- State: Update Available -->
+    <!-- State: Update Available (Major) -->
     <template v-if="state === 'available'">
       <div class="modal-body">
         <div class="modal-icon">
           <CloudUploadOutlined :style="{ fontSize: '40px', color: '#722ED1' }" />
         </div>
         <h3 class="modal-title">发现新版本 v{{ updateInfo.version }}</h3>
-        <p class="modal-desc" v-if="updateInfo.releaseNotes">{{ updateInfo.releaseNotes }}</p>
+        <div class="modal-changelog" v-if="updateInfo.releaseNotes">
+          <p class="changelog-title">更新内容：</p>
+          <div class="changelog-content">{{ updateInfo.releaseNotes }}</div>
+        </div>
         <p class="modal-desc" v-else>新版本已就绪，是否立即升级？</p>
         <div class="modal-actions">
-          <a-button @click="onSkip">跳过</a-button>
-          <a-button type="primary" @click="onStartDownload">升级</a-button>
+          <a-button @click="onLater">稍后更新</a-button>
+          <a-button type="primary" @click="onStartDownload">立即下载</a-button>
         </div>
       </div>
     </template>
@@ -45,7 +48,7 @@
         <p class="modal-desc">v{{ updateInfo.version }} 已下载完成，重启应用即可完成更新。</p>
         <div class="modal-actions">
           <a-button @click="onLater">稍后</a-button>
-          <a-button type="primary" @click="onInstall">更新</a-button>
+          <a-button type="primary" @click="onInstall">安装并重启</a-button>
         </div>
       </div>
     </template>
@@ -78,7 +81,7 @@ import {
 const props = defineProps<{
   visible: boolean
   state: 'available' | 'downloading' | 'downloaded' | 'error'
-  updateInfo: { version: string; releaseNotes?: string }
+  updateInfo: { version: string; releaseNotes?: string; updateType?: 'major' | 'minor' }
   progress: number
   errorMessage?: string
 }>()
@@ -91,10 +94,9 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const onSkip = () => emit('skip')
+const onLater = () => emit('later')
 const onStartDownload = () => emit('download')
 const onInstall = () => emit('install')
-const onLater = () => emit('later')
 const onClose = () => emit('close')
 </script>
 
@@ -125,6 +127,29 @@ const onClose = () => emit('close')
   text-align: center;
   max-width: 340px;
   word-break: break-word;
+}
+
+.modal-changelog {
+  width: 100%;
+  max-width: 360px;
+  text-align: left;
+  background: #fafafa;
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+.changelog-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #595959;
+  margin: 0 0 6px 0;
+}
+
+.changelog-content {
+  font-size: 13px;
+  color: #8c8c8c;
+  white-space: pre-line;
+  line-height: 1.6;
 }
 
 .modal-actions {

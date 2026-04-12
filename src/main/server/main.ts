@@ -348,9 +348,8 @@ class MainServer {
       // tslint:disable-next-line:no-console
       log.info('Java process exited with code ' + code + ', signal ' + signal);
       if (!this.isKilled) {
-        /**
-         * 非自身kill，需要报错，并且退出
-         */
+        // Forced kill by stopServer() sets isKilled before exit event fires
+        // If isKilled is still false, this is an unexpected crash
         log.error('Java 进程异常退出!');
         dialog.showErrorBox(`Java 进程异常退出`, `请尝试重新启动（日志目录：${javaLogDir})`);
         this.isKilled = true;
@@ -428,6 +427,9 @@ class MainServer {
         // If there's already a listener, use a one-time handler
         this.process.on('exit', exitHandler);
       }
+
+      // Mark as killed BEFORE sending signal to prevent exit handler from showing error dialog
+      this.isKilled = true;
 
       // Kill the process tree
       if (process.platform === 'win32') {

@@ -86,10 +86,14 @@ const config = {
       to: 'renderer',
     },
     {
+      from: `${distDir}/tab_services`,
+      to: 'tab_services',
+    },
+    {
       from: `build/setting.json`,
       to: 'setting.json',
     },
-    
+
   ],
 };
 

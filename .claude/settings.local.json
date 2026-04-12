@@ -43,7 +43,21 @@
       "Bash(rm:*)",
       "Bash(grep -l \"binding-win32\" \"E:/Projects/Web/odc-client/tab_services/offline-deps/pnpm-store/v10/index/\"*/*)",
       "Bash(xargs file:*)",
-      "Bash(find src:*)"
+      "Bash(find src:*)",
+      "Bash(xxd)",
+      "Bash(asar list:*)",
+      "Bash(grep -E \"^/node_modules/[^/]+/$\")",
+      "Bash(npx asar:*)",
+      "Bash(node -e \"try{const a=require\\('asar'\\);console.log\\(a.listPackage\\('release/win-unpacked/resources/app.asar'\\).filter\\(f=>f.includes\\('node_modules'\\)\\).slice\\(0,30\\).join\\('\\\\n'\\)\\)}catch\\(e\\){console.log\\(e.message\\)}\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const path=require\\('path'\\);const p='release/win-unpacked/resources/app.asar';const s=fs.statSync\\(p\\);console.log\\('asar size:',s.size,'bytes'\\)\")",
+      "Bash(grep -oP '.{0,100}\\\\.toString\\\\\\(\\\\\\).{0,100}' main.js)",
+      "Bash(grep -oP 'getUrl.{0,200}' main.js)",
+      "Bash(grep -oP '.{0,50}getUrl.{0,200}' main.js)",
+      "Bash(grep -oE '.{0,50}getUrl.{0,200}' main.js)",
+      "Bash(grep -oE '.{0,100}toString.{0,100}' main.js)",
+      "Bash(grep -oE '.{0,100}getInstance\\\\\\(\\\\\\)\\\\.port.{0,100}' main.js)",
+      "Bash(grep -oE '.{0,300}class ie\\\\b.{0,300}' main.js)",
+      "Bash(grep -oE 'ie=.{0,300}' main.js)"
     ]
   }
 }

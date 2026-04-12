@@ -1,0 +1,6 @@
+# ODC Client Update Configuration (Production)
+updateServerUrl: 'http://192.168.1.26:12345/download/'
+links:
+  home: 'https://www.oceanbase.com/'
+  help: 'https://www.oceanbase.com/docs/'
+  update: 'https://www.oceanbase.com/download/'

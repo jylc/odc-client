@@ -76,7 +76,7 @@ const displayTabs = computed(() => {
 // Update modal state
 const updateModalVisible = ref(false)
 const updateModalState = ref<'available' | 'downloading' | 'downloaded' | 'error'>('available')
-const updateModalInfo = ref<{ version: string; releaseNotes?: string }>({ version: '' })
+const updateModalInfo = ref<{ version: string; releaseNotes?: string; updateType?: 'major' | 'minor' }>({ version: '' })
 const updateProgress = ref(0)
 const updateError = ref('')
 
@@ -239,9 +239,18 @@ function setupEventListeners(): void {
   unsubscribers.push(unsubLoaded)
 
   // Update events
-  const unsubUpdateAvailable = updateService.subscribe(UPDATE_EVENTS.UPDATE_AVAILABLE, (data: { version: string; releaseNotes?: string }) => {
-    console.log('[TabBarView] Update available:', data.version)
-    updateModalInfo.value = { version: data.version, releaseNotes: data.releaseNotes }
+  const unsubUpdateAvailable = updateService.subscribe(UPDATE_EVENTS.UPDATE_AVAILABLE, (data: { version: string; releaseNotes?: string; updateType?: 'major' | 'minor' }) => {
+    console.log('[TabBarView] Update available:', data.version, 'type:', data.updateType)
+
+    // Minor updates (hotfix) are handled silently in the main process
+    // Only show modal for major updates (full installer)
+    if (data.updateType === 'minor') {
+      console.log('[TabBarView] Minor update (hotfix) - handled silently in background')
+      return
+    }
+
+    // Major update - show update modal
+    updateModalInfo.value = { version: data.version, releaseNotes: data.releaseNotes, updateType: data.updateType }
     updateModalState.value = 'available'
     updateModalVisible.value = true
   })

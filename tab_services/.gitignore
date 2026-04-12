@@ -25,3 +25,4 @@ offline-deps/
 *.njsproj
 *.sln
 *.sw?
+.pnpm-store

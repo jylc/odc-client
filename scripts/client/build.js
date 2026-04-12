@@ -16,6 +16,7 @@
 
 const { execSync } = require('child_process');
 const electronBuilder = require('electron-builder');
+const { packHotfix } = require('./pack-hotfix');
 /**
  * build renderer
  */
@@ -157,6 +158,12 @@ async function run() {
         },
       });
       await buildClient('win-jre');
+      // Pack hotfix zip for auto-update
+      try {
+        await packHotfix();
+      } catch (e) {
+        console.warn('[build] Hotfix packing failed (non-critical):', e.message);
+      }
       return;
     }
     case 'all': {

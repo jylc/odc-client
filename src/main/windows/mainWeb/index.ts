@@ -18,11 +18,10 @@ import { app, BrowserWindow, dialog, BrowserView } from 'electron';
 import path from 'path';
 import { PathnameStore } from '../../store';
 import log from '../../utils/log';
-import { injectTokenToLocalStorage } from '../../utils/token-injection';
 import { downloadEvent } from './event';
 import { TabManager } from '../../tabs';
 import { registerTabHandlers, registerWindowHandlers, registerUpdateHandlers } from '../../ipc';
-import { UpdateService } from '../../updater';
+import { UpdateService, HotUpdateService } from '../../updater';
 
 // Tab bar height constant (matches tab_service)
 // 44px TabBar (border-box, includes 1px border-bottom) + 40px UrlBar (border-box, includes 1px border-bottom) = 84px
@@ -66,10 +65,8 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
   registerUpdateHandlers();
   log.info('[MainWindow] IPC handlers registered');
 
-  // Get the initial URL for the first content tab
-  const initialContentUrl = PathnameStore.getUrl();
-  // Use initial URL or default to github.com
-  const initialUrl = initialContentUrl || 'https://github.com/';
+  // Use github.com as the homepage (local ODC server starts in background)
+  const initialUrl = 'https://www.github.com/';
 
   // Store the initial URL so new tabs can use it
   tabManager.setInitialUrl(initialUrl);
@@ -87,7 +84,7 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
   const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
   const tabServiceUrl = isDev
     ? 'http://localhost:5173' // Vite dev server
-    : `file://${path.join(app.getAppPath(), 'tab_service', 'dist', 'index.html')}`;
+    : `file://${path.join(process.resourcesPath, 'tab_services', 'index.html')}`;
 
   // Load tab_service as the tab bar UI
   mainWindow!.loadURL(tabServiceUrl).catch((e) => {
@@ -106,27 +103,29 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
     if (PathnameStore.hasPendingToken()) {
       const { token } = PathnameStore.consumeTokenParams();
       if (token) {
-        // 异步注入 token
-        injectTokenToLocalStorage(mainWindow, token)
-          .then(() => {
-            log.info('[MainWindow] Token injection completed');
-          })
-          .catch((error) => {
-            log.error('[MainWindow] Token injection failed:', error);
-          });
       }
     }
   });
 
   PathnameStore.reset();
 
+  // Apply pending hotfix on startup (before resources are locked)
+  const hotfixService = HotUpdateService.getInstance();
+  const pendingHotfix = hotfixService.hasPendingHotfix();
+  if (pendingHotfix.pending) {
+    log.info(`[MainWindow] Applying pending hotfix: ${pendingHotfix.version}`);
+    hotfixService.applyPendingHotfix();
+  }
+
   // Check for updates after a delay (don't block startup)
+  // Then start periodic check every 2 hours
+  const updateService = UpdateService.getInstance();
   setTimeout(() => {
-    UpdateService.getInstance()
-      .checkForUpdate()
-      .catch((error) => {
-        log.error('[MainWindow] Auto update check failed:', error);
-      });
+    updateService.checkForUpdate().catch((error) => {
+      log.error('[MainWindow] Auto update check failed:', error);
+    });
+    // Start periodic check (every 2 hours)
+    updateService.startPeriodicCheck(2 * 60 * 60 * 1000);
   }, 5000);
 
   // Set up window resize handler
