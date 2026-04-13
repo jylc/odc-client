@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DBDC 协议测试页面</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #1890ff;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #555;
+            margin-top: 0;
+        }
+        .test-link {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #1890ff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 5px;
+            transition: background 0.3s;
+        }
+        .test-link:hover {
+            background: #40a9ff;
+        }
+        .test-link.warning {
+            background: #fa8c16;
+        }
+        .test-link.warning:hover {
+            background: #ffa940;
+        }
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .status.success {
+            background: #f6ffed;
+            border: 1px solid #b7eb8f;
+            color: #52c41a;
+        }
+        .status.error {
+            background: #fff2f0;
+            border: 1px solid #ffccc7;
+            color: #ff4d4f;
+        }
+        .status.info {
+            background: #e6f7ff;
+            border: 1px solid #91d5ff;
+            color: #1890ff;
+        }
+        input[type="text"] {
+            width: 300px;
+            padding: 8px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #40a9ff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔗 DBDC 深度链接测试工具</h1>
+
+    <div class="card">
+        <h2>📋 测试前准备</h2>
+        <div class="status info">
+            <strong>重要提示：</strong>
+            <ul>
+                <li>确保 ODC 应用正在运行（已执行 <code>pnpm run dev:client</code>）</li>
+                <li>确保已运行注册脚本：<code>.\scripts\register_dbdc_protocol.bat</code>（生产环境）</li>
+                <li>或运行开发环境注册脚本：<code>.\scripts\register_dbdc_protocol_dev.bat</code></li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>🧪 快速测试</h2>
+        <p>点击以下链接测试 dbdc:// 协议：</p>
+        <a href="dbdc://http://localhost:8000/#/sqlworkspace?token=test123&env=sit" class="test-link">
+            测试链接 1（带 token）
+        </a>
+        <a href="dbdc://http://localhost:8000/#/console" class="test-link">
+            测试链接 2（控制台）
+        </a>
+        <a href="dbdc://http://localhost:8000/" class="test-link warning">
+            测试链接 3（首页）
+        </a>
+        <div id="clickStatus" class="status" style="display: none;"></div>
+    </div>
+
+    <div class="card">
+        <h2>🔧 自定义测试</h2>
+        <p>输入自定义的 URL 参数：</p>
+        <input type="text" id="customToken" placeholder="输入 token 值" value="">
+        <input type="text" id="customEnv" placeholder="输入环境（如：sit、uat）" value="sit">
+        <button onclick="testCustomLink()">测试自定义链接</button>
+        <div id="customStatus" class="status" style="display: none;"></div>
+    </div>
+
+    <div class="card">
+        <h2>📊 故障排查</h2>
+        <div id="troubleshooting">
+            <p><strong>如果点击链接没有反应：</strong></p>
+            <ol>
+                <li>检查注册表是否正确配置：
+                    <button onclick="checkRegistry()">检查注册表</button>
+                </li>
+                <li>查看 ODC 日志文件：<code>%APPDATA%\odc-client\logs\</code></li>
+                <li>确认 ODC 应用正在运行</li>
+            </ol>
+            <div id="registryStatus" class="status" style="display: none;"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📝 检查清单</h2>
+        <label>
+            <input type="checkbox" id="check1"> ODC 应用已启动
+        </label><br>
+        <label>
+            <input type="checkbox" id="check2"> 已运行注册脚本（管理员权限）
+        </label><br>
+        <label>
+            <input type="checkbox" id="check3"> 日志中看到 "register dbdc:// protocol" 消息
+        </label><br>
+        <label>
+            <input type="checkbox" id="check4"> 点击链接后应用有响应
+        </label>
+    </div>
+
+    <script>
+        // 监听链接点击
+        document.querySelectorAll('.test-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                const status = document.getElementById('clickStatus');
+                status.style.display = 'block';
+                status.className = 'status info';
+                status.innerHTML = `<strong>正在尝试打开：</strong><code>${this.href}</code><br>如果应用没有响应，请检查上方故障排查步骤。`;
+            });
+        });
+
+        // 自定义链接测试
+        function testCustomLink() {
+            const token = document.getElementById('customToken').value;
+            const env = document.getElementById('customEnv').value;
+
+            if (!token) {
+                const status = document.getElementById('customStatus');
+                status.style.display = 'block';
+                status.className = 'status error';
+                status.textContent = '请输入 token 值';
+                return;
+            }
+
+            const url = `dbdc://http://localhost:8000/#/sqlworkspace?token=${encodeURIComponent(token)}&env=${env}`;
+            const status = document.getElementById('customStatus');
+            status.style.display = 'block';
+            status.className = 'status info';
+            status.innerHTML = `<strong>正在尝试打开：</strong><code>${url}</code>`;
+
+            window.location.href = url;
+        }
+
+        // 检查注册表（仅 Windows，需要 ActiveX）
+        function checkRegistry() {
+            const status = document.getElementById('registryStatus');
+            status.style.display = 'block';
+
+            // 尝试打开注册表位置
+            try {
+                const shell = new ActiveXObject('WScript.Shell');
+                const key = shell.RegRead('HKEY_CLASSES_ROOT\\dbdc\\');
+                status.className = 'status success';
+                status.innerHTML = '<strong>✓ 注册表配置已找到</strong><br>dbdc:// 协议已正确注册';
+            } catch (e) {
+                status.className = 'status error';
+                status.innerHTML = '<strong>✗ 注册表配置未找到</strong><br>请以管理员身份运行注册脚本：<code>.\scripts\register_dbdc_protocol.bat</code>';
+            }
+        }
+
+        // 页面加载时的检查
+        window.addEventListener('load', function() {
+            // 检测是否在本地打开
+            if (location.protocol === 'file:') {
+                console.log('本地文件模式');
+            }
+        });
+    </script>
+</body>
+</html>

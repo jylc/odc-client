@@ -15,7 +15,7 @@ export interface UpdaterConfig {
 const DEFAULT_CONFIG: UpdaterConfig = {
   updateServerUrl: '',
   links: {
-    home: 'https://www.oceanbase.com/',
+    home: 'https://hellogithub.com/',
     help: 'https://www.oceanbase.com/docs/',
     update: 'https://www.oceanbase.com/download/',
   },

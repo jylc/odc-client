@@ -29,7 +29,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import TabBar from '../components/TabBar.vue'
 import UrlBar from '../components/UrlBar.vue'
 import { tabService, TAB_EVENTS } from '../services/tabService'
-import { appLinks } from '../config/links'
+import { appLinks, loadAppLinks } from '../config/links'
 import type { TabInfo } from '../types/tab'
 
 // Tab state - synced with main process via IPC
@@ -87,6 +87,9 @@ async function initializeTabs(): Promise<void> {
   }
 
   try {
+    // Load links from main process (YAML config) before any tab operations
+    await loadAppLinks();
+
     console.log('[TabBarView] Getting existing tabs from main process')
     // Get existing tabs from main process
     const allTabs = await tabService.getAllTabs()

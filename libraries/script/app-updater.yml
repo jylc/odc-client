@@ -1,6 +1,6 @@
 # ODC Client Update Configuration (Production)
 updateServerUrl: 'http://192.168.1.26:12345/download/'
 links:
-  home: 'https://www.oceanbase.com/'
-  help: 'https://www.oceanbase.com/docs/'
+  home: 'https://hellogithub.com/'
+  help: 'https://www.runoob.com/'
   update: 'https://www.oceanbase.com/download/'

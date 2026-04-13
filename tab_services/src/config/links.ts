@@ -2,45 +2,27 @@
  * Link configuration - loaded from main process via IPC or from defaults
  */
 
+import { reactive } from 'vue';
+
 export interface AppLinks {
   home: string;
   help: string;
   update: string;
 }
 
-// Default links (fallback)
+// Default links (fallback) - must match libraries/script/app-updater*.yml
 const defaultLinks: AppLinks = {
-  home: 'https://www.oceanbase.com/',
+  home: 'https://hellogithub.com/',
   help: 'https://www.oceanbase.com/docs/',
   update: 'https://www.oceanbase.com/download/',
 };
 
-/**
- * Get app links synchronously (returns cached or default values)
- */
-export function getAppLinks(): AppLinks {
-  // Return cached links if available
-  if (cachedLinks) {
-    return cachedLinks;
-  }
-
-  try {
-    // Try to get links from window.appConfig if available (injected by main process)
-    if ((window as any).appConfig?.links) {
-      return (window as any).appConfig.links as AppLinks;
-    }
-  } catch (error) {
-    console.warn('[links] Failed to read appConfig:', error);
-  }
-
-  return defaultLinks;
-}
-
-let cachedLinks: AppLinks | null = null;
+// Reactive links object - starts with defaults, updated via loadAppLinks()
+export const appLinks: AppLinks = reactive<AppLinks>({ ...defaultLinks });
 
 /**
- * Load links from main process via IPC (async)
- * Falls back to defaults if IPC is not available
+ * Load links from main process via IPC and update the reactive appLinks.
+ * Call this once during app initialization.
  */
 export async function loadAppLinks(): Promise<AppLinks> {
   try {
@@ -48,16 +30,14 @@ export async function loadAppLinks(): Promise<AppLinks> {
     if (isElectron) {
       const config = await (window as any).electron.update.getConfig();
       if (config?.links) {
-        cachedLinks = config.links;
-        return cachedLinks!;
+        Object.assign(appLinks, config.links);
+        console.log('[links] Loaded from main process:', config.links);
+        return appLinks;
       }
     }
   } catch (error) {
     console.warn('[links] Failed to load links from main process:', error);
   }
 
-  return defaultLinks;
+  return appLinks;
 }
-
-// Initialize with defaults, can be updated later via loadAppLinks()
-export const appLinks = getAppLinks();

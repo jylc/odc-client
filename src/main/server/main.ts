@@ -266,12 +266,12 @@ class MainServer {
     if (JAVA_HOME) {
       env['JAVA_HOME'] = JAVA_HOME;
     }
-    const h2MigrationSuccess = await runH2Migration();
+/*    const h2MigrationSuccess = await runH2Migration();
     if (!h2MigrationSuccess) {
       log.error('H2 migration failed');
       app.quit();
       return;
-    }
+    }*/
     // https://stackoverflow.com/questions/10232192/exec-display-stdout-live
     try {
       const setting = getSetting();

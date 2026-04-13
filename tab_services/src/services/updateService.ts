@@ -54,9 +54,12 @@ export const updateService = {
 
   async getConfig(): Promise<UpdaterConfig> {
     if (!isElectron) {
+      // Fallback: read from the same defaults as libraries/script/app-updater*.yml
+      // The main process (configLoader.ts) loads the actual YAML file and exposes it via IPC.
+      // These defaults mirror the YAML values for non-Electron environments (e.g. browser dev).
       return {
         links: {
-          home: 'https://www.oceanbase.com/',
+          home: 'https://hellogithub.com/',
           help: 'https://www.oceanbase.com/docs/',
           update: 'https://www.oceanbase.com/download/',
         },

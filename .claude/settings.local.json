@@ -61,7 +61,10 @@
       "Bash(npx -y @affaan-m/ecc@latest mcp --help)",
       "Bash(npx -y everything-claude-code mcp --help)",
       "Bash(node \"C:\\\\Users\\\\wxb17\\\\.claude\\\\plugins\\\\marketplaces\\\\ecc\\\\dist\\\\index.js\" mcp --help)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(tasklist:*)",
+      "Bash(powershell:*)",
+      "Bash(cmd.exe:*)"
     ]
   },
   "enabledPlugins": {}
