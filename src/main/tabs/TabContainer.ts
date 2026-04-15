@@ -16,6 +16,7 @@
 
 import { BrowserView } from 'electron';
 import log from '../utils/log';
+import { preloadScriptPath } from '../config';
 import { ITabContainer, TabBounds, TabInfo, TAB_EVENTS } from './types';
 
 /**
@@ -61,6 +62,7 @@ export class TabContainer implements ITabContainer {
 
     this.browserView = new BrowserView({
       webPreferences: {
+        preload: preloadScriptPath,
         nodeIntegration: isLocalContent,
         contextIsolation: !isLocalContent,
         webSecurity: !isLocalContent,

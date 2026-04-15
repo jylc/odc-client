@@ -15,8 +15,7 @@
  */
 
 import * as Splashscreen from '@trodi/electron-splashscreen';
-import path from 'path';
-import { mainWebWindowConfig } from '../config';
+import { mainWebWindowConfig, preloadScriptPath } from '../config';
 
 export default function () {
   // show splash screen
@@ -28,11 +27,7 @@ export default function () {
       webPreferences: {
         ...mainWebWindowConfig.webPreferences,
         // Ensure preload is explicitly set for the splashscreen window
-        preload: path.join(
-          process.env.NODE_ENV === 'development' ? process.cwd() : process.resourcesPath || '',
-          'libraries/script',
-          'preload.js',
-        ),
+        preload: preloadScriptPath,
         nodeIntegration: false,
         contextIsolation: true,
         webSecurity: false,

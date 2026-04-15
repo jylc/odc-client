@@ -8,6 +8,7 @@ import { exec } from 'child_process';
 import log from '../utils/log';
 import { TabManager } from '../tabs';
 import { getUpdaterConfig } from './configLoader';
+import { preloadScriptPath } from '../config';
 import { compareUpdateType } from './versionUtils';
 import { HotUpdateService } from './HotUpdateService';
 
@@ -132,11 +133,7 @@ export class UpdateService {
         show: false,
         autoHideMenuBar: true,
         webPreferences: {
-          preload: path.join(
-            isDev ? process.cwd() : process.resourcesPath || '',
-            'libraries/script',
-            'preload.js',
-          ),
+          preload: preloadScriptPath,
           nodeIntegration: false,
           contextIsolation: true,
           webSecurity: false,

@@ -17,6 +17,7 @@
 import { ipcMain, BrowserWindow, app } from 'electron';
 import path from 'path';
 import log from '../utils/log';
+import { preloadScriptPath } from '../config';
 import { TabManager } from '../tabs';
 
 // Track the settings window to prevent multiple instances
@@ -165,11 +166,7 @@ export function registerWindowHandlers(): void {
         show: false,
         autoHideMenuBar: true,
         webPreferences: {
-          preload: path.join(
-            process.env.NODE_ENV === 'development' ? process.cwd() : process.resourcesPath || '',
-            'libraries/script',
-            'preload.js',
-          ),
+          preload: preloadScriptPath,
           nodeIntegration: false,
           contextIsolation: true,
           webSecurity: false,
@@ -251,11 +248,7 @@ export function registerWindowHandlers(): void {
         show: false,
         autoHideMenuBar: true,
         webPreferences: {
-          preload: path.join(
-            process.env.NODE_ENV === 'development' ? process.cwd() : process.resourcesPath || '',
-            'libraries/script',
-            'preload.js',
-          ),
+          preload: preloadScriptPath,
           nodeIntegration: false,
           contextIsolation: true,
           webSecurity: false,

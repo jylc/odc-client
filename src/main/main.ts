@@ -38,6 +38,7 @@ import { openMainWebWindow } from './windows/mainWeb';
 import startScreen from './windows/startScreen';
 import { setupTabEvents } from './tabs/events';
 import { TabManager } from './tabs/TabManager';
+import { getUpdaterConfig } from './updater/configLoader';
 import path from 'path';
 
 Sentry.init({
@@ -82,10 +83,75 @@ if (setting && Object.keys(setting).includes('client.electron.params')) {
  *
  * 需要从 argv 中找到 dbdc:// 协议 URL
  */
+
+/**
+ * 将 token 注入到 home 标签页
+ * 1. 查找当前是否已有打开 home URL 的标签页
+ * 2. 有则直接注入，无则创建新标签页并注入
+ */
+function injectTokenToHomeTab(token: string): void {
+  if (!token) return;
+
+  const config = getUpdaterConfig();
+  const homeUrl = config.links.home;
+  if (!homeUrl) {
+    log.warn('[injectTokenToHomeTab] No home URL configured');
+    return;
+  }
+
+  log.info(`[injectTokenToHomeTab] Home URL: ${homeUrl}, token length: ${token.length}`);
+
+  const tabManager = TabManager.getInstance();
+  if (!tabManager.mainWindow) {
+    log.warn('[injectTokenToHomeTab] TabManager not initialized');
+    return;
+  }
+
+  // 查找是否已有打开 home URL 的标签页
+  const allTabs = tabManager.getAllTabs();
+  let homeTab = allTabs.find((tab) => {
+    try {
+      const tabUrl = new URL(tab.url);
+      const homeUrlObj = new URL(homeUrl);
+      return tabUrl.origin === homeUrlObj.origin && tabUrl.pathname === homeUrlObj.pathname;
+    } catch {
+      return tab.url === homeUrl;
+    }
+  });
+
+  if (homeTab) {
+    // 标签页已存在，直接注入 token
+    log.info(`[injectTokenToHomeTab] Found existing home tab: ${homeTab.id}, injecting token`);
+    homeTab.browserView.webContents
+      .executeJavaScript(`localStorage.setItem("token","${token}")`)
+      .then(() => {
+        log.info('[injectTokenToHomeTab] Token injected into existing tab');
+      })
+      .catch((error) => {
+        log.error('[injectTokenToHomeTab] Failed to inject token:', error);
+      });
+  } else {
+    // 创建新标签页打开 home URL，加载完成后注入 token
+    log.info(`[injectTokenToHomeTab] No existing home tab, creating new tab for: ${homeUrl}`);
+    const newTab = tabManager.createTab(homeUrl, { isActive: true });
+    newTab.browserView.webContents.on('did-finish-load', () => {
+      log.info(`[injectTokenToHomeTab] Home tab loaded, injecting token`);
+      newTab.browserView.webContents
+        .executeJavaScript(`localStorage.setItem("token","${token}")`)
+        .then(() => {
+          log.info('[injectTokenToHomeTab] Token injected into new tab');
+        })
+        .catch((error) => {
+          log.error('[injectTokenToHomeTab] Failed to inject token into new tab:', error);
+        });
+    });
+  }
+}
+
 function resolveWinRemoteParams(
   argv,
   mainWindow = null,
-): { resolved: boolean; fullUrl?: string; hash?: string } {
+): { resolved: boolean; fullUrl?: string; hash?: string; token?: string } {
   if (!argv || argv.length === 0) {
     log.info('[resolveWinRemoteParams] No argv provided');
     return { resolved: false };
@@ -103,7 +169,7 @@ function resolveWinRemoteParams(
 
     try {
       const rawUrl = getUrlFromSchema(schemaUrl);
-      const fullUrl = rawUrl;
+      const fullUrl = decodeURIComponent(rawUrl);
       log.info('[resolveWinRemoteParams] Extracted full URL:', fullUrl);
 
       const params = parseUrlParams(fullUrl);
@@ -130,11 +196,12 @@ function resolveWinRemoteParams(
         PathnameStore.addParams(fullUrl);
       }
 
-      // 如果窗口已就绪，立即注入 token
-      if (mainWindow && params.token) {
+      // 如果有 token，注入到 home 标签页
+      if (params.token) {
+        injectTokenToHomeTab(params.token);
       }
 
-      return { resolved: true, fullUrl, hash: params.hash };
+      return { resolved: true, fullUrl, hash: params.hash, token: params.token };
     } catch (error) {
       log.error('[resolveWinRemoteParams] Error processing schema URL:', error);
       return { resolved: false };
@@ -300,12 +367,18 @@ async function initApp() {
     const startResult = resolveWinRemoteParams(process.argv);
     createNewMainWeb();
 
-    // 如果是通过协议首次启动，在窗口创建后再打开新标签页
+    // 如果是通过协议首次启动，在窗口创建后再打开新标签页并注入 token
     if (startResult.resolved && startResult.fullUrl) {
       const tabManager = TabManager.getInstance();
       if (tabManager.mainWindow) {
         log.info('[Ready] Opening tab for protocol URL:', startResult.fullUrl);
         tabManager.createTab(startResult.fullUrl, { isActive: true });
+
+        // 首次启动时 TabManager 在 resolveWinRemoteParams 中未就绪，
+        // 在窗口创建后重新注入 token 到 home 标签页
+        if (startResult.token) {
+          injectTokenToHomeTab(startResult.token);
+        }
       }
     }
   });
@@ -410,7 +483,7 @@ async function initApp() {
 
     if (urlStr && isSchemaUrl(urlStr)) {
       const rawUrl = getUrlFromSchema(urlStr);
-      const fullUrl = rawUrl;
+      const fullUrl = decodeURIComponent(rawUrl);
       const params = parseUrlParams(fullUrl);
 
       log.info('[open-url] fullUrl:', fullUrl);
@@ -419,6 +492,8 @@ async function initApp() {
       if (params.token) {
         PathnameStore.setTokenParams(params.token, params.env);
         log.info('[open-url] Token params stored from macOS open-url');
+        // 注入 token 到 home 标签页
+        injectTokenToHomeTab(params.token);
       }
 
       // 解析完整 URL 并设置 pathname 和 hash

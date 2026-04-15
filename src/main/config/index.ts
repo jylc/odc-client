@@ -27,6 +27,13 @@ export const maxJDKVersion = '1.8.0';
 
 export const minJDKReleaseVersion = 200;
 
+// Preload script path - single source of truth
+export const preloadScriptPath = path.join(
+  process.env.NODE_ENV === 'development' ? process.cwd() : process.resourcesPath || '',
+  'libraries/script',
+  'preload.js',
+);
+
 export const mainWebWindowConfig: BrowserWindowConstructorOptions = {
   height: defaultMainWebHeight,
   width: defaultMainWebWidth,
@@ -36,11 +43,7 @@ export const mainWebWindowConfig: BrowserWindowConstructorOptions = {
   titleBarStyle: 'hidden', // 隐藏标题栏，macOS 兼容
   roundedCorners: false, // 禁用 DWM 圆角，避免 BrowserView 四角出现圆角间隙
   webPreferences: {
-    preload: path.join(
-      process.env.NODE_ENV === 'development' ? process.cwd() : process.resourcesPath || '',
-      'libraries/script',
-      'preload.js',
-    ),
+    preload: preloadScriptPath,
     nodeIntegration: false,
     contextIsolation: true,
     webSecurity: false,
