@@ -39,47 +39,11 @@ export function setupTabEvents(mainWindow: BrowserWindow): void {
     };
   });
 
-  // Handle navigation events for active tab
-  mainWindow.webContents.on('did-navigate', (event, url) => {
-    const activeTab = tabManager.getActiveTab();
-    if (activeTab) {
-      activeTab.url = url;
-      log.info(`[TabEvents] Active tab navigated to: ${url}`);
-    }
-  });
-
-  // Handle page title updates
-  mainWindow.webContents.on('page-title-updated', (event, title) => {
-    const activeTab = tabManager.getActiveTab();
-    if (activeTab) {
-      activeTab.title = title;
-      log.info(`[TabEvents] Active tab title updated: ${title}`);
-    }
-  });
-
-  // Handle page favicon updates
-  mainWindow.webContents.on('page-favicon-updated', (event, favicons) => {
-    const activeTab = tabManager.getActiveTab();
-    if (activeTab && favicons.length > 0) {
-      activeTab.favicon = favicons[0];
-      log.info(`[TabEvents] Active tab favicon updated`);
-    }
-  });
-
-  // Handle loading state
-  mainWindow.webContents.on('did-start-loading', () => {
-    const activeTab = tabManager.getActiveTab();
-    if (activeTab) {
-      activeTab.isLoading = true;
-    }
-  });
-
-  mainWindow.webContents.on('did-stop-loading', () => {
-    const activeTab = tabManager.getActiveTab();
-    if (activeTab) {
-      activeTab.isLoading = false;
-    }
-  });
+  // Note: Navigation events (did-navigate, page-title-updated, etc.) are NOT
+  // monitored here because mainWindow hosts the tab bar UI (tab_services), not
+  // tab content. Each TabContainer already listens on its own BrowserView
+  // webContents for URL/title/favicon/loading updates. Listening on mainWindow
+  // would incorrectly overwrite active tab data with tab_services' own URL.
 
   log.info('[TabEvents] Tab events set up for main window');
 }

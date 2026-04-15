@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('ODCClient', {
+const api = {
   ipcInvoke(method, ...args) {
     return ipcRenderer
       .invoke(method, ...args)
@@ -8,10 +8,9 @@ contextBridge.exposeInMainWorld('ODCClient', {
         return result;
       });
   },
-});
+};
 
-// Expose tab API for the multi-tab system
-contextBridge.exposeInMainWorld('electron', {
+const electronApi = {
   tab: {
     create: (url, options) => ipcRenderer.invoke('tab:create', url, options),
     switch: (tabId) => ipcRenderer.invoke('tab:switch', tabId),
@@ -68,4 +67,14 @@ contextBridge.exposeInMainWorld('electron', {
       return () => ipcRenderer.removeListener(event, listener);
     },
   },
-});
+};
+
+// contextBridge requires contextIsolation to be enabled.
+// When contextIsolation is false (local content), expose APIs directly on window.
+if (contextBridge && process.contextIsolated) {
+  contextBridge.exposeInMainWorld('ODCClient', api);
+  contextBridge.exposeInMainWorld('electron', electronApi);
+} else {
+  window.ODCClient = api;
+  window.electron = electronApi;
+}

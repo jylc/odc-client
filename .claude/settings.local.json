@@ -65,7 +65,10 @@
       "Bash(tasklist:*)",
       "Bash(powershell:*)",
       "Bash(cmd.exe:*)",
-      "Bash(where objdump:*)"
+      "Bash(where objdump:*)",
+      "Bash(/usr/local/node/node-v20.14.0-linux-x64/bin/node *)",
+      "Bash(bash *)",
+      "Bash(rtk git *)"
     ]
   },
   "enabledPlugins": {}

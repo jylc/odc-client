@@ -16,6 +16,7 @@
 
 import * as Splashscreen from '@trodi/electron-splashscreen';
 import { mainWebWindowConfig, preloadScriptPath } from '../config';
+import path from "path";
 
 export default function () {
   // show splash screen
