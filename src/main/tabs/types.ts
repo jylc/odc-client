@@ -22,6 +22,7 @@ export interface TabOptions {
   title?: string;
   favicon?: string;
   isActive?: boolean;
+  tag?: string; // Optional tag to identify special tabs (e.g., 'home', 'help')
 }
 
 export interface TabInfo {
@@ -33,6 +34,7 @@ export interface TabInfo {
   isLoading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  tag?: string; // Optional tag to identify special tabs (e.g., 'home', 'help')
 }
 
 export interface TabBounds {
@@ -50,6 +52,7 @@ export interface ITabContainer {
   favicon?: string;
   isActive: boolean;
   isLoading: boolean;
+  tag?: string; // Optional tag to identify special tabs (e.g., 'home', 'help')
 
   loadURL(url: string): Promise<void>;
   setActive(active: boolean, bounds?: TabBounds): void;

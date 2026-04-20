@@ -39,6 +39,7 @@ export class TabContainer implements ITabContainer {
   public favicon?: string;
   public isActive: boolean;
   public isLoading: boolean;
+  public readonly tag?: string; // Optional tag to identify special tabs (e.g., 'home', 'help')
 
   private currentBounds: TabBounds;
   private isDestroyed: boolean = false;
@@ -46,12 +47,13 @@ export class TabContainer implements ITabContainer {
   private wasLocalUrl: boolean = false; // Track initial URL type for security boundary detection
   private devToolsShouldStayOpen: boolean = false; // Track DevTools state to keep open across navigations
 
-  constructor(url: string, id?: string) {
+  constructor(url: string, id?: string, tag?: string) {
     this.id = id || generateTabId();
     this.url = url;
     this.title = this.extractTitleFromUrl(url);
     this.isActive = false;
     this.isLoading = false;
+    this.tag = tag; // Store the tag
     this.currentBounds = { x: 0, y: 0, width: 0, height: 0 };
 
     // Determine security settings based on URL
@@ -420,6 +422,7 @@ export class TabContainer implements ITabContainer {
       isLoading: this.isLoading,
       canGoBack: !this.isDestroyed && this.browserView.webContents.canGoBack(),
       canGoForward: !this.isDestroyed && this.browserView.webContents.canGoForward(),
+      tag: this.tag,
     };
   }
 

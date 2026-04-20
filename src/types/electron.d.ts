@@ -17,7 +17,7 @@
 import { TabInfo } from '../page/TabBar/types';
 
 interface ElectronTabAPI {
-  create: (url: string, options?: { title?: string; favicon?: string }) => Promise<TabInfo>;
+  create: (url: string, options?: { title?: string; favicon?: string; tag?: string }) => Promise<TabInfo>;
   switch: (tabId: string) => Promise<{ success: boolean; error?: string }>;
   close: (tabId: string) => Promise<{ success: boolean; error?: string }>;
   getAll: () => Promise<TabInfo[]>;

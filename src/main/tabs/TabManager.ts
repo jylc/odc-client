@@ -215,7 +215,7 @@ export class TabManager implements ITabManager {
       throw new Error('[TabManager] Main window not initialized');
     }
 
-    const tab = new TabContainer(url, options.id);
+    const tab = new TabContainer(url, options.id, options.tag);
 
     // Set up event callback for IPC broadcasting
     tab.setEventCallback((event, data) => {

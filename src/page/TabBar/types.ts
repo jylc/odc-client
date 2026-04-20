@@ -23,6 +23,7 @@ export interface TabInfo {
   isLoading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  tag?: string; // Optional tag to identify special tabs (e.g., 'home', 'help')
 }
 
 export interface TabBarProps {

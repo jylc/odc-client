@@ -284,15 +284,27 @@ async function onNewTab(): Promise<void> {
 }
 
 /**
- * Handle go home - open new tab with configured home URL
+ * Handle go home - switch to existing tab with 'home' tag or create new one
  */
 async function onGoHome(): Promise<void> {
   console.log('[TabBarView] onGoHome called, URL:', appLinks.home)
 
   if (tabService.isAvailable()) {
     try {
-      const newTab = await tabService.createTab(appLinks.home)
-      activeTabId.value = newTab.id
+      // Check if there's already a tab with 'home' tag
+      const existingTab = tabs.value.find((tab) => tab.tag === 'home')
+
+      if (existingTab) {
+        // Switch to existing tab
+        console.log('[TabBarView] Found existing home tab:', existingTab.id)
+        await tabService.switchTab(existingTab.id)
+        activeTabId.value = existingTab.id
+      } else {
+        // Create new tab with home URL and 'home' tag
+        console.log('[TabBarView] Creating new home tab with tag')
+        const newTab = await tabService.createTab(appLinks.home, { tag: 'home' })
+        activeTabId.value = newTab.id
+      }
     } catch (error) {
       console.error('[TabBarView] Failed to go home:', error)
     }
@@ -300,15 +312,27 @@ async function onGoHome(): Promise<void> {
 }
 
 /**
- * Handle help - open new tab with configured help URL
+ * Handle help - switch to existing tab with 'help' tag or create new one
  */
 async function onHelp(): Promise<void> {
   console.log('[TabBarView] onHelp called, URL:', appLinks.help)
 
   if (tabService.isAvailable()) {
     try {
-      const newTab = await tabService.createTab(appLinks.help)
-      activeTabId.value = newTab.id
+      // Check if there's already a tab with 'help' tag
+      const existingTab = tabs.value.find((tab) => tab.tag === 'help')
+
+      if (existingTab) {
+        // Switch to existing tab
+        console.log('[TabBarView] Found existing help tab:', existingTab.id)
+        await tabService.switchTab(existingTab.id)
+        activeTabId.value = existingTab.id
+      } else {
+        // Create new tab with help URL and 'help' tag
+        console.log('[TabBarView] Creating new help tab with tag')
+        const newTab = await tabService.createTab(appLinks.help, { tag: 'help' })
+        activeTabId.value = newTab.id
+      }
     } catch (error) {
       console.error('[TabBarView] Failed to open help:', error)
     }
