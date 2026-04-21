@@ -19,6 +19,10 @@ import { setLocale } from '@umijs/max';
 import utc from 'dayjs/plugin/utc';
 import duration from 'dayjs/plugin/duration';
 import dayjs from 'dayjs';
+// 加载 Monaco Editor 中文语言包 (必须在其他模块导入 monaco-editor 之前)
+import { setLocaleData } from 'monaco-editor-nls';
+import zhHans from 'monaco-editor-nls/locale/zh-hans.json';
+setLocaleData(zhHans);
 import { initMetaStore } from './common/metaStore';
 import DndHTML5Provider from './component/DndHTML5Provider';
 import registerPlugins from './plugins/register';

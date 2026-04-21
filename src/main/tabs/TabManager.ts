@@ -15,10 +15,12 @@
  */
 
 import { BrowserWindow, BrowserView } from 'electron';
+import path from 'path';
 import log from '../utils/log';
 import { TabContainer, TabEventCallback } from './TabContainer';
 import { TabStore } from './TabStore';
 import { ITabManager, ITabContainer, TabOptions, TabInfo, TabBounds, TAB_EVENTS } from './types';
+import MainServer from '../server/main';
 
 export class TabManager implements ITabManager {
   private static instance: TabManager | null = null;
@@ -210,12 +212,170 @@ export class TabManager implements ITabManager {
     this.tabStore.save(tabs);
   }
 
+  /**
+   * Check if a URL points to localhost
+   */
+  private isLocalhostUrl(url: string): boolean {
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname.toLowerCase();
+      return (
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname === '0.0.0.0' ||
+        hostname === '[::1]'
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get the loading page URL based on environment
+   */
+  private getLoadingPageUrl(): string {
+    const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
+    return isDev
+      ? 'http://localhost:5173/loading.html'
+      : `file://${path.join(process.resourcesPath, 'tab_services', 'loading.html')}`;
+  }
+
+  /**
+   * Poll server status and navigate tab when ready
+   */
+  private pollAndNavigate(tab: ITabContainer, targetUrl: string): void {
+    const pollInterval = 3000; // Poll every 3 seconds
+    const maxAttempts = 120; // Max ~6 minutes
+    let attempts = 0;
+
+    const check = () => {
+      const server = MainServer.getInstance();
+      if (server.status === 'ready') {
+        log.info(`[TabManager] Server ready, navigating tab ${tab.id} to: ${targetUrl}`);
+        tab.loadURL(targetUrl).catch((error) => {
+          log.error(`[TabManager] Failed to navigate to ${targetUrl}:`, error);
+        });
+      } else if (attempts < maxAttempts) {
+        attempts++;
+        setTimeout(check, pollInterval);
+      } else {
+        log.error(`[TabManager] Server did not become ready after ${maxAttempts} attempts, giving up navigation to: ${targetUrl}`);
+      }
+    };
+
+    // Start polling after a short initial delay
+    setTimeout(check, 2000);
+  }
+
+  /**
+   * Find or create a tab with tag 'dbdc-client'.
+   * If a tab with tag 'dbdc-client' already exists, navigate it to the URL and activate it.
+   * Otherwise create a new tab with that tag.
+   * Used by protocol handlers (dbdc:// schema) to reuse the same tab.
+   */
+  findOrCreateDbdcClientTab(url: string): ITabContainer {
+    const existing = Array.from(this.tabs.values()).find((t) => t.tag === 'dbdc-client');
+    if (existing) {
+      log.info(
+        `[TabManager] Found existing dbdc-client tab: ${existing.id}, switching and navigating to: ${url}`,
+      );
+      this.switchTab(existing.id);
+      // Use navigateTab to respect loading-page logic for localhost URLs
+      this.navigateTab(existing.id, url).catch((error) => {
+        log.error(`[TabManager] Failed to navigate dbdc-client tab:`, error);
+      });
+      return existing;
+    }
+
+    log.info(`[TabManager] No existing dbdc-client tab, creating new tab for: ${url}`);
+    return this.createTab(url, { isActive: true, tag: 'dbdc-client' });
+  }
+
+  /**
+   * Navigate an existing tab to a URL, with loading page interception for localhost URLs.
+   * Used by URL bar navigation (tab:loadURL IPC handler).
+   */
+  async navigateTab(tabId: string, url: string): Promise<void> {
+    const tab = this.tabs.get(tabId);
+    if (!tab) {
+      throw new Error(`[TabManager] Tab ${tabId} not found`);
+    }
+
+    if (this.isLocalhostUrl(url)) {
+      const server = MainServer.getInstance();
+      const isDev =
+        process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
+
+      if (isDev) {
+        // Dev mode: show loading page first, navigate to target after 5s
+        log.info(`[TabManager] Dev mode: showing loading page before navigating to ${url}`);
+        await tab.loadURL(this.getLoadingPageUrl());
+        const targetUrl = url;
+        setTimeout(() => {
+          tab.loadURL(targetUrl).catch((error) => {
+            log.error(`[TabManager] Failed to navigate to ${targetUrl}:`, error);
+          });
+          log.info(`[TabManager] Dev mode delay complete, navigating to: ${targetUrl}`);
+        }, 5000);
+        return;
+      } else if (server.status !== 'ready') {
+        // Production: show loading page, poll until server is ready
+        log.info(`[TabManager] Server not ready, showing loading page for navigation to ${url}`);
+        await tab.loadURL(this.getLoadingPageUrl());
+        this.pollAndNavigate(tab, url);
+        return;
+      }
+    }
+
+    // Direct navigation (non-localhost or server already ready)
+    await tab.loadURL(url);
+  }
+
   createTab(url: string, options: Partial<TabOptions> = {}): ITabContainer {
     if (!this.mainWindow) {
       throw new Error('[TabManager] Main window not initialized');
     }
 
-    const tab = new TabContainer(url, options.id, options.tag);
+    // For localhost URLs, show loading page if server is not ready
+    let loadUrl = url;
+    let pendingTargetUrl: string | null = null;
+    if (this.isLocalhostUrl(url)) {
+      const server = MainServer.getInstance();
+      const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
+
+      if (isDev) {
+        // Dev mode: always show loading page, navigate after 5s
+        loadUrl = this.getLoadingPageUrl();
+        pendingTargetUrl = url;
+        log.info(`[TabManager] Localhost URL in dev mode, showing loading page for: ${url}`);
+      } else if (server.status !== 'ready') {
+        // Production: show loading page, poll until server is ready
+        loadUrl = this.getLoadingPageUrl();
+        pendingTargetUrl = url;
+        log.info(`[TabManager] Server not ready, showing loading page for: ${url}`);
+      }
+    }
+
+    const tab = new TabContainer(loadUrl, options.id, options.tag);
+
+    // Schedule navigation to the actual URL after delay
+    if (pendingTargetUrl) {
+      const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
+      if (isDev) {
+        // Dev mode: fixed 5 second delay
+        setTimeout(() => {
+          try {
+            tab.loadURL(pendingTargetUrl!);
+            log.info(`[TabManager] Dev mode delay complete, navigating to: ${pendingTargetUrl}`);
+          } catch (error) {
+            log.error(`[TabManager] Failed to navigate after delay:`, error);
+          }
+        }, 5000);
+      } else {
+        // Production: poll server status until ready
+        this.pollAndNavigate(tab, pendingTargetUrl);
+      }
+    }
 
     // Set up event callback for IPC broadcasting
     tab.setEventCallback((event, data) => {

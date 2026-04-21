@@ -216,7 +216,7 @@ export function registerTabHandlers(): void {
     try {
       const activeTab = tabManager.getActiveTab();
       if (activeTab) {
-        await activeTab.loadURL(url);
+        await tabManager.navigateTab(activeTab.id, url);
         return { success: true };
       }
       return { success: false, error: 'No active tab' };

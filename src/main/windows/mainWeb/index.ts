@@ -22,6 +22,7 @@ import { downloadEvent } from './event';
 import { TabManager } from '../../tabs';
 import { registerTabHandlers, registerWindowHandlers, registerUpdateHandlers } from '../../ipc';
 import { UpdateService } from '../../updater';
+import { getUpdaterConfig } from '../../updater/configLoader';
 
 // Tab bar height constant (matches tab_service)
 // 44px TabBar (border-box, includes 1px border-bottom) + 40px UrlBar (border-box, includes 1px border-bottom) = 84px
@@ -65,17 +66,18 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
   registerUpdateHandlers();
   log.info('[MainWindow] IPC handlers registered');
 
-  // Use github.com as the homepage (local ODC server starts in background)
-  const initialUrl = 'https://www.github.com/';
+  // Get home page URL from updater config (matches appLinks.home in renderer)
+  const updaterConfig = getUpdaterConfig();
+  const homeUrl = updaterConfig.links.home;
 
   // Store the initial URL so new tabs can use it
-  tabManager.setInitialUrl(initialUrl);
+  tabManager.setInitialUrl(homeUrl);
 
-  // Create first tab BEFORE loading the tab_service UI
-  // The tab data will be available when Vue app calls getAllTabs()
+  // Create first tab with the home URL (no loading page for home tab)
   try {
-    const tab = tabManager.createTab(initialUrl, { isActive: true, title: 'GitHub' });
-    log.info(`[MainWindow] Created initial tab: ${tab.id} for URL: ${initialUrl}`);
+    const homeTitle = new URL(homeUrl).hostname;
+    const tab = tabManager.createTab(homeUrl, { isActive: true, title: homeTitle, tag: 'home' });
+    log.info(`[MainWindow] Created initial home tab: ${tab.id} for URL: ${homeUrl}`);
   } catch (error) {
     log.error('[MainWindow] Failed to create initial tab:', error);
   }

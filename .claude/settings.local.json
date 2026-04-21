@@ -68,8 +68,23 @@
       "Bash(where objdump:*)",
       "Bash(/usr/local/node/node-v20.14.0-linux-x64/bin/node *)",
       "Bash(bash *)",
-      "Bash(rtk git *)"
+      "Bash(rtk git *)",
+      "Skill(update-config)",
+      "Bash(npx chrome-devtools-mcp@latest navigate_page '{\"url\": \"https://developers.chrome.com\"}')",
+      "Bash(rtk curl *)",
+      "Bash(claude mcp *)",
+      "Bash(rtk ls *)",
+      "Bash(rtk read *)",
+      "Bash(rtk pnpm *)",
+      "Bash(npm info *)",
+      "Bash(rtk grep *)",
+      "Bash(rtk tree *)",
+      "Bash(rtk find *)",
+      "Bash(rtk npx *)",
+      "Bash(rtk tsc *)"
     ]
   },
-  "enabledPlugins": {}
+  "enabledPlugins": {
+    "chrome-devtools-mcp@claude-plugins-official": false
+  }
 }

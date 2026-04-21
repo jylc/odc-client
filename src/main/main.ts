@@ -270,14 +270,14 @@ async function initApp() {
         if (activeWindow.isMinimized()) activeWindow.restore();
         activeWindow.focus();
 
-        // 用解析到的 URL 创建新标签页并激活
+        // 用解析到的 URL 创建或复用 dbdc-client 标签页
         const tabManager = TabManager.getInstance();
         if (tabManager.mainWindow) {
           // 拼接最终要加载的 URL：协议提取后的完整地址
           const finalUrl = result.fullUrl || '';
           if (finalUrl) {
-            log.info('[second-instance] Creating tab with URL:', finalUrl);
-            tabManager.createTab(finalUrl, { isActive: true });
+            log.info('[second-instance] Opening dbdc-client tab with URL:', finalUrl);
+            tabManager.findOrCreateDbdcClientTab(finalUrl);
           }
         } else {
           log.info('[second-instance] TabManager not initialized yet');
@@ -371,8 +371,8 @@ async function initApp() {
     if (startResult.resolved && startResult.fullUrl) {
       const tabManager = TabManager.getInstance();
       if (tabManager.mainWindow) {
-        log.info('[Ready] Opening tab for protocol URL:', startResult.fullUrl);
-        tabManager.createTab(startResult.fullUrl, { isActive: true });
+        log.info('[Ready] Opening dbdc-client tab for protocol URL:', startResult.fullUrl);
+        tabManager.findOrCreateDbdcClientTab(startResult.fullUrl);
 
         // 首次启动时 TabManager 在 resolveWinRemoteParams 中未就绪，
         // 在窗口创建后重新注入 token 到 home 标签页
@@ -523,8 +523,8 @@ async function initApp() {
 
         const tabManager = TabManager.getInstance();
         if (tabManager.mainWindow) {
-          log.info('[open-url] Creating tab with URL:', openUrl);
-          tabManager.createTab(openUrl, { isActive: true });
+          log.info('[open-url] Opening dbdc-client tab with URL:', openUrl);
+          tabManager.findOrCreateDbdcClientTab(openUrl);
         }
       } else {
         log.info('[open-url] No protocol URL, opening new window');

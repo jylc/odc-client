@@ -76,6 +76,12 @@ const config = {
     "@@node_modules": path.resolve(process.cwd(), 'node_modules')
   },
   chainWebpack(config) {
+    // 配置 monaco-editor-nls：替换 Monaco Editor 的 nls 模块以支持中文
+    config.resolve.alias.set(
+      'monaco-editor/esm/vs/nls',
+      path.resolve(process.cwd(), 'node_modules/monaco-editor-nls/vscode-nls.js')
+    );
+
     config.plugin('monaco').use(MonacoWebpackPlugin, [
       {
         filename: '[name].worker.js',
