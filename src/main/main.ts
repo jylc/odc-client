@@ -122,19 +122,33 @@ function injectTokenToHomeTab(token: string): void {
   if (homeTab) {
     // 标签页已存在，直接注入 token
     log.info(`[injectTokenToHomeTab] Found existing home tab: ${homeTab.id}, injecting token`);
-    homeTab.browserView.webContents
-      .executeJavaScript(`localStorage.setItem("token","${token}")`)
-      .then(() => {
-        log.info('[injectTokenToHomeTab] Token injected into existing tab');
-      })
-      .catch((error) => {
-        log.error('[injectTokenToHomeTab] Failed to inject token:', error);
-      });
+    if (!homeTab.browserView.webContents.isDestroyed()) {
+      homeTab.browserView.webContents
+        .executeJavaScript(`localStorage.setItem("token","${token}")`)
+        .then(() => {
+          log.info('[injectTokenToHomeTab] Token injected into existing tab');
+        })
+        .catch((error) => {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (errorMessage.includes('Render frame was disposed')) {
+            log.warn('[injectTokenToHomeTab] Frame disposed during injection, ignoring');
+          } else {
+            log.error('[injectTokenToHomeTab] Failed to inject token:', error);
+          }
+        });
+    } else {
+      log.warn('[injectTokenToHomeTab] Home tab webContents is destroyed, skipping injection');
+    }
   } else {
     // 创建新标签页打开 home URL，加载完成后注入 token
     log.info(`[injectTokenToHomeTab] No existing home tab, creating new tab for: ${homeUrl}`);
     const newTab = tabManager.createTab(homeUrl, { isActive: true });
     newTab.browserView.webContents.on('did-finish-load', () => {
+      // Check if webContents is still valid before injecting
+      if (newTab.browserView.webContents.isDestroyed()) {
+        log.warn('[injectTokenToHomeTab] Home tab webContents was destroyed before token injection');
+        return;
+      }
       log.info(`[injectTokenToHomeTab] Home tab loaded, injecting token`);
       newTab.browserView.webContents
         .executeJavaScript(`localStorage.setItem("token","${token}")`)
@@ -142,7 +156,12 @@ function injectTokenToHomeTab(token: string): void {
           log.info('[injectTokenToHomeTab] Token injected into new tab');
         })
         .catch((error) => {
-          log.error('[injectTokenToHomeTab] Failed to inject token into new tab:', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          if (errorMessage.includes('Render frame was disposed')) {
+            log.warn('[injectTokenToHomeTab] Frame disposed during new tab injection, ignoring');
+          } else {
+            log.error('[injectTokenToHomeTab] Failed to inject token into new tab:', error);
+          }
         });
     });
   }

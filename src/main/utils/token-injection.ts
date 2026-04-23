@@ -33,6 +33,18 @@ export async function injectTokenToLocalStorage(
     return;
   }
 
+  // Check if window is still valid
+  if (mainWindow.isDestroyed()) {
+    log.warn('[Token Injection] Skipped: window is destroyed');
+    return;
+  }
+
+  // Check if webContents is still valid
+  if (!mainWindow.webContents || mainWindow.webContents.isDestroyed()) {
+    log.warn('[Token Injection] Skipped: webContents is destroyed');
+    return;
+  }
+
   try {
     log.info('[Token Injection] Checking existing token...');
 
@@ -60,6 +72,12 @@ export async function injectTokenToLocalStorage(
       log.info('[Token Injection] Skipping injection - existing token is valid');
     }
   } catch (error) {
-    log.error('[Token Injection] Failed:', error);
+    // Ignore "Render frame was disposed" errors during navigation/close
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes('Render frame was disposed')) {
+      log.warn('[Token Injection] Frame was disposed, skipping injection');
+    } else {
+      log.error('[Token Injection] Failed:', error);
+    }
   }
 }

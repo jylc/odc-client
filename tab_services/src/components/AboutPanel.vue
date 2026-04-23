@@ -297,6 +297,8 @@ const checkUpdate = async () => {
     updateAvailable.value = true
     updateType.value = result.updateType || null
     newVersion.value = result.version || ''
+    changelogNotes.value = result.releaseNotes || ''
+    changelogVersion.value = result.version || ''
     updateMessage.value = `检测到最新版本：${result.version}`
     downloadState.value = 'downloading'
     downloadProgress.value = 0
@@ -330,13 +332,17 @@ const toggleChangelog = async () => {
     return
   }
 
-  // Read releaseNotes: prefer remote result, fallback to local
-  if (newVersion.value && changelogNotes.value) {
-    // Already loaded
-  } else if (updateService.isAvailable()) {
-    const result = await updateService.getReleaseNotes()
-    changelogNotes.value = result.releaseNotes || ''
-    changelogVersion.value = result.version || ''
+  // If no changelog loaded yet, fetch from update server
+  if (!changelogNotes.value && updateService.isAvailable()) {
+    try {
+      const result = await updateService.check()
+      if (result?.releaseNotes) {
+        changelogNotes.value = result.releaseNotes
+        changelogVersion.value = result.version || ''
+      }
+    } catch {
+      // Server check failed, leave changelog empty
+    }
   }
 
   showChangelog.value = true

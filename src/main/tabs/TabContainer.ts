@@ -227,8 +227,14 @@ export class TabContainer implements ITabContainer {
     webContents.on('did-finish-load', () => {
       if (this.isDestroyed) return;
       this.isLoading = false;
-      this.url = webContents.getURL();
-      this.title = this.extractTitleFromUrl(this.url);
+      // Safely access webContents methods - frame might be disposed during rapid navigation
+      try {
+        this.url = webContents.getURL();
+        this.title = webContents.getTitle() || this.extractTitleFromUrl(this.url);
+      } catch (error) {
+        // Frame was disposed, use current state as fallback
+        log.debug(`[Tab ${this.id}] WebFrame disposed during did-finish-load, using cached state`);
+      }
       log.info(`[Tab ${this.id}] Finished loading: ${this.url}`);
 
       // Include navigation state when page finishes loading
@@ -413,6 +419,9 @@ export class TabContainer implements ITabContainer {
   }
 
   getTabInfo(): TabInfo {
+    // Check if webContents is still valid before accessing it
+    const webContentsValid =
+      !this.isDestroyed && this.browserView && !this.browserView.webContents.isDestroyed();
     return {
       id: this.id,
       url: this.url,
@@ -420,8 +429,8 @@ export class TabContainer implements ITabContainer {
       favicon: this.favicon,
       isActive: this.isActive,
       isLoading: this.isLoading,
-      canGoBack: !this.isDestroyed && this.browserView.webContents.canGoBack(),
-      canGoForward: !this.isDestroyed && this.browserView.webContents.canGoForward(),
+      canGoBack: webContentsValid && this.browserView.webContents.canGoBack(),
+      canGoForward: webContentsValid && this.browserView.webContents.canGoForward(),
       tag: this.tag,
     };
   }
