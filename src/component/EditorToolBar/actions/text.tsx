@@ -26,6 +26,7 @@ import { ReactComponent as UndoSvg } from '@/svgr/Undo.svg';
 import { textExpaste } from '@/util/data/sql';
 import type { ToolBarActions } from '..';
 import { getStatus } from './pl';
+import QueryLimitInput from './QueryLimitInput';
 
 async function getMonaco() {
   return monaco;
@@ -347,6 +348,10 @@ const textActions: ToolBarActions = {
       codeEditor.executeEdits('INCONVERT', [op]);
       ctx.editor?.focus();
     },
+  },
+
+  QUERY_LIMIT_INPUT: {
+    Component: QueryLimitInput,
   },
 };
 
