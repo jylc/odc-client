@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron';
 import { autoUpdater, UpdateInfo } from 'electron-updater';
 import fs from 'fs';
 import path from 'path';
+import { pathToFileURL } from 'url';
 import http from 'http';
 import https from 'https';
 import { exec } from 'child_process';
@@ -118,7 +119,7 @@ export class UpdateService {
       const queryParams = new URLSearchParams({ version, releaseNotes });
       const updateUrl = isDev
         ? `http://localhost:5173/#/update?${queryParams.toString()}`
-        : `file://${path.join(process.resourcesPath || '', 'tab_services', 'index.html')}#/update?${queryParams.toString()}`;
+        : `${pathToFileURL(path.join(process.resourcesPath || '', 'tab_services', 'index.html')).href}#/update?${queryParams.toString()}`;
 
       const updateWindow = new BrowserWindow({
         width: 460,

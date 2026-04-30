@@ -55,8 +55,12 @@ initRenderService();
  */
 const gotTheLock = app.requestSingleInstanceLock();
 process.on('uncaughtException', (e) => {
-  log.info('uncaughtException');
-  log.info(e);
+  const errorMsg = e?.message || String(e);
+  // 过滤渲染帧被提前释放的无害错误（Electron 内部竞态）
+  if (errorMsg.includes('Render frame was disposed')) {
+    return;
+  }
+  log.error('uncaughtException', e);
 });
 /**
  * 初始化浏览器参数
@@ -83,6 +87,31 @@ if (setting && Object.keys(setting).includes('client.electron.params')) {
  *
  * 需要从 argv 中找到 dbdc:// 协议 URL
  */
+
+/**
+ * 如果 URL 中的端口与 MainServer 的端口不同，替换为 MainServer 的端口
+ */
+function adjustUrlToServerPort(url: string): string {
+  const mainServer = MainServer.getInstance();
+  if (!mainServer.port) {
+    log.warn('[adjustUrlToServerPort] MainServer port not available yet');
+    return url;
+  }
+
+  try {
+    const urlObj = new URL(url);
+    const urlPort = parseInt(urlObj.port, 10);
+    if (urlPort && urlPort !== mainServer.port) {
+      log.info(`[adjustUrlToServerPort] Port adjusted: ${urlPort} -> ${mainServer.port}`);
+      urlObj.port = String(mainServer.port);
+      return urlObj.toString();
+    }
+  } catch (e) {
+    log.error('[adjustUrlToServerPort] Failed to parse URL:', e);
+  }
+
+  return url;
+}
 
 /**
  * 将 token 注入到 home 标签页
@@ -293,7 +322,7 @@ async function initApp() {
         const tabManager = TabManager.getInstance();
         if (tabManager.mainWindow) {
           // 拼接最终要加载的 URL：协议提取后的完整地址
-          const finalUrl = result.fullUrl || '';
+          const finalUrl = adjustUrlToServerPort(result.fullUrl || '');
           if (finalUrl) {
             log.info('[second-instance] Opening dbdc-client tab with URL:', finalUrl);
             tabManager.findOrCreateDbdcClientTab(finalUrl);
@@ -386,18 +415,37 @@ async function initApp() {
     const startResult = resolveWinRemoteParams(process.argv);
     createNewMainWeb();
 
-    // 如果是通过协议首次启动，在窗口创建后再打开新标签页并注入 token
+    // 如果是通过协议首次启动，等待 MainServer 端口就绪后再打开新标签页
     if (startResult.resolved && startResult.fullUrl) {
-      const tabManager = TabManager.getInstance();
-      if (tabManager.mainWindow) {
-        log.info('[Ready] Opening dbdc-client tab for protocol URL:', startResult.fullUrl);
-        tabManager.findOrCreateDbdcClientTab(startResult.fullUrl);
+      const mainServer = MainServer.getInstance();
+      const openProtocolTab = () => {
+        const tabManager = TabManager.getInstance();
+        if (tabManager.mainWindow) {
+          const adjustedUrl = adjustUrlToServerPort(startResult.fullUrl);
+          log.info('[Ready] Opening dbdc-client tab for protocol URL:', adjustedUrl);
+          tabManager.findOrCreateDbdcClientTab(adjustedUrl);
 
-        // 首次启动时 TabManager 在 resolveWinRemoteParams 中未就绪，
-        // 在窗口创建后重新注入 token 到 home 标签页
-        if (startResult.token) {
-          injectTokenToHomeTab(startResult.token);
+          // 首次启动时 TabManager 在 resolveWinRemoteParams 中未就绪，
+          // 在窗口创建后重新注入 token 到 home 标签页
+          if (startResult.token) {
+            injectTokenToHomeTab(startResult.token);
+          }
         }
+      };
+
+      if (mainServer.port) {
+        // 端口已就绪，直接打开
+        openProtocolTab();
+      } else {
+        // 端口未就绪，等待服务器启动
+        log.info('[Ready] Waiting for MainServer port before opening protocol tab');
+        mainServer
+          .startServer()
+          .then(() => openProtocolTab())
+          .catch((err) => {
+            log.error('[Ready] MainServer start failed, opening tab with original URL:', err);
+            openProtocolTab();
+          });
       }
     }
   });
@@ -527,7 +575,7 @@ async function initApp() {
         PathnameStore.addParams(fullUrl);
       }
 
-      openUrl = fullUrl;
+      openUrl = adjustUrlToServerPort(fullUrl);
     }
 
     const instance = MainServer.getInstance();

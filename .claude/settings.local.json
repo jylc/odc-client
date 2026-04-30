@@ -81,7 +81,8 @@
       "Bash(rtk tree *)",
       "Bash(rtk find *)",
       "Bash(rtk npx *)",
-      "Bash(rtk tsc *)"
+      "Bash(rtk tsc *)",
+      "mcp__plugin_everything-claude-code_sequential-thinking__sequentialthinking"
     ]
   },
   "enabledPlugins": {

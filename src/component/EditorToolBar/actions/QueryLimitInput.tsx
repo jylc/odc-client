@@ -17,7 +17,7 @@
 import InputBigNumber from '@/component/InputBigNumber';
 import SQLConfigContext from '@/component/SQLConfig/SQLConfigContext';
 import { formatMessage } from '@/util/intl';
-import { Tooltip } from 'antd';
+import { message, Tooltip } from 'antd';
 import React, { useContext, useEffect, useState } from 'react';
 
 const QueryLimitInput: React.FC = () => {
@@ -25,6 +25,7 @@ const QueryLimitInput: React.FC = () => {
   const [queryLimitValue, setQueryLimitValue] = useState<number>(undefined);
 
   const queryLimit = session?.params?.queryLimit;
+  const maxQueryLimit = session?.params?.maxQueryLimit;
 
   useEffect(() => {
     setQueryLimitValue(queryLimit);
@@ -35,13 +36,21 @@ const QueryLimitInput: React.FC = () => {
   }
 
   const handleBlur = async () => {
-    const maxQueryLimit = session?.params?.maxQueryLimit;
     if (maxQueryLimit !== Number.MAX_SAFE_INTEGER && !queryLimitValue) {
-      setQueryLimitValue(session?.params.queryLimit);
+      setQueryLimitValue(queryLimit);
       return;
     }
     if (queryLimitValue > maxQueryLimit) {
-      setQueryLimitValue(session?.params.queryLimit);
+      message.warning(
+        formatMessage(
+          {
+            id: 'odc.component.EditorToolBar.QueryLimitInput.MaxLimit',
+            defaultMessage: '查询结果限制不能超过 {maxLimit}',
+          },
+          { maxLimit: maxQueryLimit },
+        ),
+      );
+      setQueryLimitValue(queryLimit);
     } else {
       await session.setQueryLimit(queryLimitValue);
     }
@@ -67,6 +76,7 @@ const QueryLimitInput: React.FC = () => {
         <InputBigNumber
           value={queryLimitValue}
           min="1"
+          max={maxQueryLimit !== Number.MAX_SAFE_INTEGER ? String(maxQueryLimit) : undefined}
           style={{
             width: 80,
             height: 24,

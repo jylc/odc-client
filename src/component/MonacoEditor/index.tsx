@@ -202,6 +202,23 @@ const MonacoEditor: React.FC<IProps> = function (props) {
       new PlaceholderContentWidget(placeholder, editorRef.current);
     }
 
+    // 支持 Ctrl+鼠标滚轮缩放字体
+    const editorDomNode = editorRef.current.getDomNode();
+    if (editorDomNode) {
+      editorDomNode.addEventListener(
+        'wheel',
+        (e: WheelEvent) => {
+          if (!e.ctrlKey) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const action =
+            e.deltaY < 0 ? 'editor.action.fontZoomIn' : 'editor.action.fontZoomOut';
+          editorRef.current.trigger('mouseWheel', action, null);
+        },
+        true,
+      );
+    }
+
     await initPlugin();
     editorRef.current.updateOptions({
       readOnly,

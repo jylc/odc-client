@@ -457,11 +457,17 @@ export class TabContainer implements ITabContainer {
       // This prevents callbacks from firing on destroyed objects
       webContents.removeAllListeners();
 
-      // CRITICAL: Destroy webContents to free memory and stop renderer process
-      // The webContents object maintains a renderer process that consumes memory
-      // Calling destroy() properly cleans up the process and releases resources
-      (webContents as any).destroy();
-      log.info(`[Tab ${this.id}] webContents destroyed, renderer process terminated`);
+      // CRITICAL: 延迟销毁 webContents，让 Electron 内部完成待处理的 WebFrameMain 访问
+      // 这样可以避免 "Render frame was disposed before WebFrameMain could be accessed" 错误
+      setImmediate(() => {
+        try {
+          (webContents as any).destroy();
+          log.info(`[Tab ${this.id}] webContents destroyed, renderer process terminated`);
+        } catch (error) {
+          // 可能已经被销毁，忽略错误
+          log.debug(`[Tab ${this.id}] webContents already destroyed:`, error);
+        }
+      });
     } catch (error) {
       log.warn(`[Tab ${this.id}] Error during cleanup:`, error);
     }

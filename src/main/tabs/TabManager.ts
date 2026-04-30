@@ -16,6 +16,7 @@
 
 import { BrowserWindow, BrowserView } from 'electron';
 import path from 'path';
+import { pathToFileURL } from 'url';
 import log from '../utils/log';
 import { TabContainer, TabEventCallback } from './TabContainer';
 import { TabStore } from './TabStore';
@@ -237,7 +238,7 @@ export class TabManager implements ITabManager {
     const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
     return isDev
       ? 'http://localhost:5173/loading.html'
-      : `file://${path.join(process.resourcesPath, 'tab_services', 'loading.html')}`;
+      : pathToFileURL(path.join(process.resourcesPath, 'tab_services', 'loading.html')).href;
   }
 
   /**

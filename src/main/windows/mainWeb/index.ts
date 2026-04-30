@@ -16,6 +16,7 @@
 
 import { app, BrowserWindow, dialog, BrowserView } from 'electron';
 import path from 'path';
+import { pathToFileURL } from 'url';
 import { PathnameStore } from '../../store';
 import log from '../../utils/log';
 import { downloadEvent } from './event';
@@ -86,7 +87,7 @@ export function openMainWebWindow(mainWindow: BrowserWindow) {
   const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
   const tabServiceUrl = isDev
     ? 'http://localhost:5173' // Vite dev server
-    : `file://${path.join(process.resourcesPath, 'tab_services', 'index.html')}`;
+    : pathToFileURL(path.join(process.resourcesPath, 'tab_services', 'index.html')).href;
 
   // Load tab_service as the tab bar UI
   mainWindow!.loadURL(tabServiceUrl).catch((e) => {

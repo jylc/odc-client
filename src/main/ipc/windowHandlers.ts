@@ -16,6 +16,7 @@
 
 import { ipcMain, BrowserWindow, app } from 'electron';
 import path from 'path';
+import { pathToFileURL } from 'url';
 import log from '../utils/log';
 import { preloadScriptPath } from '../config';
 import { TabManager } from '../tabs';
@@ -151,7 +152,7 @@ export function registerWindowHandlers(): void {
       const isDev = process.env.ODC_DEBUG_MODE === 'open' || process.env.NODE_ENV === 'development';
       const settingsUrl = isDev
         ? 'http://localhost:5173/#/settings'
-        : `file://${path.join(process.resourcesPath, 'tab_services', 'index.html')}#/settings`;
+        : `${pathToFileURL(path.join(process.resourcesPath, 'tab_services', 'index.html')).href}#/settings`;
 
       settingsWindow = new BrowserWindow({
         width: 640,
@@ -233,7 +234,7 @@ export function registerWindowHandlers(): void {
       });
       const updateUrl = isDev
         ? `http://localhost:5173/#/update?${queryParams.toString()}`
-        : `file://${path.join(process.resourcesPath, 'tab_services', 'index.html')}#/update?${queryParams.toString()}`;
+        : `${pathToFileURL(path.join(process.resourcesPath, 'tab_services', 'index.html')).href}#/update?${queryParams.toString()}`;
 
       updateModalWindow = new BrowserWindow({
         width: 460,

@@ -21,28 +21,32 @@ const AdmZip = require('adm-zip');
 /**
  * Pack hotfix zip for auto-update
  *
- * Creates a zip file containing:
- * - renderer/        → {resourcesPath}/renderer
- * - tab_services/    → {resourcesPath}/tab_services
- * - version.json     → {resourcesPath}/version.json
+ * Creates a zip file from the built release:
+ * - app.asar          → {resourcesPath}/app.asar
+ * - renderer/         → {resourcesPath}/renderer
+ * - tab_services/     → {resourcesPath}/tab_services
+ * - version.json      → {resourcesPath}/version.json
  *
- * The zip file is named hotfix-{version}.zip and will be downloaded
- * by the HotUpdateService during minor version updates.
+ * Source: release/win-unpacked/resources/
  */
 async function packHotfix() {
   const projectRoot = path.resolve(__dirname, '../..');
-  const distDir = path.join(projectRoot, 'dist');
   const releaseDir = path.join(projectRoot, 'release');
-  const versionJsonPath = path.join(distDir, 'version.json');
-  const rendererDir = path.join(distDir, 'renderer');
-  const tabServicesDir = path.join(projectRoot, 'tab_services', 'dist');
+  const resourcesDir = path.join(releaseDir, 'win-unpacked', 'resources');
 
-  // Check if version.json exists (created by build:client script)
+  // Verify resources directory exists
+  if (!fs.existsSync(resourcesDir)) {
+    throw new Error(
+      `Resources directory not found at ${resourcesDir}. Run 'npm run build:client' first.`,
+    );
+  }
+
+  // Read version from version.json in resources
+  const versionJsonPath = path.join(resourcesDir, 'version.json');
   if (!fs.existsSync(versionJsonPath)) {
     throw new Error(`version.json not found at ${versionJsonPath}. Run 'npm run build:client' first.`);
   }
 
-  // Read version from version.json
   const versionContent = fs.readFileSync(versionJsonPath, 'utf-8');
   const versionData = JSON.parse(versionContent);
   const version = versionData.version;
@@ -53,11 +57,17 @@ async function packHotfix() {
 
   console.log(`[pack-hotfix] Creating hotfix for version ${version}`);
 
-  // Verify required directories exist
+  // Verify required files/directories exist
+  const appAsarPath = path.join(resourcesDir, 'app.asar');
+  const rendererDir = path.join(resourcesDir, 'renderer');
+  const tabServicesDir = path.join(resourcesDir, 'tab_services');
+
+  if (!fs.existsSync(appAsarPath)) {
+    throw new Error(`app.asar not found at ${appAsarPath}`);
+  }
   if (!fs.existsSync(rendererDir)) {
     throw new Error(`Renderer directory not found at ${rendererDir}`);
   }
-
   if (!fs.existsSync(tabServicesDir)) {
     throw new Error(`Tab services directory not found at ${tabServicesDir}`);
   }
@@ -70,6 +80,10 @@ async function packHotfix() {
   // Create zip file
   const zip = new AdmZip();
 
+  // Add app.asar
+  console.log(`[pack-hotfix] Adding app.asar from ${appAsarPath}`);
+  zip.addLocalFile(appAsarPath);
+
   // Add renderer directory
   console.log(`[pack-hotfix] Adding renderer from ${rendererDir}`);
   zip.addLocalFolder(rendererDir, 'renderer');
@@ -78,7 +92,7 @@ async function packHotfix() {
   console.log(`[pack-hotfix] Adding tab_services from ${tabServicesDir}`);
   zip.addLocalFolder(tabServicesDir, 'tab_services');
 
-  // Add version.json (read content and add as file, not as directory)
+  // Add version.json
   console.log(`[pack-hotfix] Adding version.json from ${versionJsonPath}`);
   const versionContentBuffer = Buffer.from(JSON.stringify(versionData, null, 2));
   zip.addFile('version.json', versionContentBuffer);
