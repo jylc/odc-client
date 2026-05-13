@@ -41,6 +41,16 @@ import { TabManager } from './tabs/TabManager';
 import { getUpdaterConfig } from './updater/configLoader';
 import path from 'path';
 
+/**
+ * 强制将工作目录切换到 exe 所在目录
+ * 修复从桌面快捷方式启动时 CWD 不是应用目录导致的路径问题
+ * （render-process-gone launch-failed 等）
+ */
+if (app.isPackaged) {
+  const exeDir = path.dirname(process.execPath);
+  process.chdir(exeDir);
+}
+
 Sentry.init({
   dsn: 'https://859452cf23044aeda8677a8bdcc53081@obc-sentry.oceanbase.com/3',
 });
@@ -136,17 +146,9 @@ function injectTokenToHomeTab(token: string): void {
     return;
   }
 
-  // 查找是否已有打开 home URL 的标签页
+  // 通过 tag 标签查找 home 标签页
   const allTabs = tabManager.getAllTabs();
-  let homeTab = allTabs.find((tab) => {
-    try {
-      const tabUrl = new URL(tab.url);
-      const homeUrlObj = new URL(homeUrl);
-      return tabUrl.origin === homeUrlObj.origin && tabUrl.pathname === homeUrlObj.pathname;
-    } catch {
-      return tab.url === homeUrl;
-    }
-  });
+  const homeTab = allTabs.find((tab) => tab.tag === 'home');
 
   if (homeTab) {
     // 标签页已存在，直接注入 token
