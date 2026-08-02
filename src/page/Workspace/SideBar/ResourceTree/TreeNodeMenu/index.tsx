@@ -178,7 +178,7 @@ const TreeNodeMenu = (props: IProps) => {
     let ellipsisItemsProp: ItemType[] = getMenuItems(ellipsisItems);
 
     return (
-      <div className={treeStyles.menuActions}>
+      <div className={classNames(treeStyles.menuActions, 'odc-resource-tree-actions')}>
         {menuItems
           .map((item) => {
             const isHideItem = item.isHide ? item.isHide(dbSession, node) : false;
@@ -229,7 +229,10 @@ const TreeNodeMenu = (props: IProps) => {
       return null;
     }
     return (
-      <Badge className={treeStyles.env} color={EnvColorMap[env?.style?.toUpperCase()]?.tipColor} />
+      <Badge
+        className={classNames(treeStyles.env, 'odc-resource-tree-env')}
+        color={EnvColorMap[env?.style?.toUpperCase()]?.tipColor}
+      />
     );
   }
 

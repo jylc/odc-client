@@ -50,6 +50,13 @@ export default function exportToSQL(
       .map((item, i: number) => {
         const columnName = headerColumnNames[i];
         const column = columnMap[columnName];
+        // Distinguish real DB NULL from the literal string "null":
+        // the data grid renders both as the display string "null", so we
+        // fall back to the raw cell value which preserves the JS null type.
+        const rawValue = rows?.[columnIndex]?.[column?.key];
+        if (rawValue === null || rawValue === undefined) {
+          return 'NULL';
+        }
         const isMasked = column.masked;
         if (isMasked) {
           return item || 'NULL';

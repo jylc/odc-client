@@ -22,9 +22,20 @@ import { EventDataNode } from 'antd/lib/tree';
 import sessionManager from '@/store/sessionManager';
 import ResourceTreeContext from '../../context/ResourceTreeContext';
 
-export default function useTreeState(id: string) {
+interface IUseTreeStateOptions {
+  /**
+   * Whether expanding a node should sync the current database id.
+   * The main ResourceTree needs it to highlight/link the database, while a tree
+   * rendered inside the SelectPanel should keep it disabled to avoid closing the
+   * panel / navigating away when a database node is expanded.
+   */
+  setCurrentDatabaseOnExpand?: boolean;
+}
+
+export default function useTreeState(id: string, options?: IUseTreeStateOptions) {
   const { cache } = useContext(TreeStateStore);
   const treeContext = useContext(ResourceTreeContext);
+  const { setCurrentDatabaseOnExpand = true } = options || {};
   let state: {
     sessionIds: Record<number, string>;
     expandedKeys: (string | number)[];
@@ -39,15 +50,35 @@ export default function useTreeState(id: string) {
   }
   const [expandedKeys, setExpandedKeys] = useState<(string | number)[]>(state.expandedKeys);
   const [loadedKeys, setLoadedKeys] = useState<(string | number)[]>(state.loadedKeys);
+  /**
+   * The same component instance may switch between different `id`s (e.g. the SelectPanel
+   * keeps one ProjectTree instance while the user enters different projects). useState
+   * only initializes once, so whenever `id` changes, reset the local keys to the cache of
+   * the new `id`; otherwise stale expanded/loaded keys from a previous id would leak into
+   * the new tree and suppress lazy loading (clicking a node would not trigger loadData).
+   */
+  const [prevId, setPrevId] = useState(id);
+  if (prevId !== id) {
+    setPrevId(id);
+    const nextState = cache[id] || (cache[id] = {
+      expandedKeys: [],
+      loadedKeys: [],
+      sessionIds: {},
+    });
+    setExpandedKeys(nextState.expandedKeys);
+    setLoadedKeys(nextState.loadedKeys);
+  }
   const onExpand: TreeProps['onExpand'] = function (expandedKeys, { expanded, node }) {
     const { sessionId, cid } = node as TreeDataNode & EventDataNode<any>;
-    if (sessionId) {
-      const session = sessionManager.sessionMap.get(sessionId);
-      if (session) {
-        treeContext.setCurrentDatabaseId(session?.odcDatabase?.id);
+    if (setCurrentDatabaseOnExpand) {
+      if (sessionId) {
+        const session = sessionManager.sessionMap.get(sessionId);
+        if (session) {
+          treeContext.setCurrentDatabaseId(session?.odcDatabase?.id);
+        }
+      } else if (cid) {
+        treeContext.setCurrentDatabaseId(cid);
       }
-    } else if (cid) {
-      treeContext.setCurrentDatabaseId(cid);
     }
     if (expanded && !loadedKeys?.includes(node.key)) {
       /**

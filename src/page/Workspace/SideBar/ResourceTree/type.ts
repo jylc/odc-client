@@ -22,6 +22,7 @@ import { DataNode } from 'antd/lib/tree';
 export enum ResourceNodeType {
   Connection,
   Database,
+  Datasource,
   TableRoot,
   Table,
   TableColumnRoot,

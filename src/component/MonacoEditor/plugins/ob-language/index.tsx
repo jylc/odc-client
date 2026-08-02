@@ -14,10 +14,53 @@
  * limitations under the License.
  */
 
+import * as monaco from 'monaco-editor';
 import Plugin from '@oceanbase-odc/monaco-plugin-ob';
 
 let plugin = null;
 const languages = [];
+
+/**
+ * Wrap monaco.languages.registerCompletionItemProvider so that any completion
+ * provider registered afterwards (i.e. the OB language plugin's provider)
+ * returns suggestions whose inserted text is lowercased on accept.
+ *
+ * Only the insertText is lowercased; the label/documentation stay unchanged so
+ * the suggestion popup still shows the original (uppercase) metadata, while the
+ * text actually written into the editor is lowercase.
+ */
+function patchCompletionProviderToLowerCase() {
+  if ((monaco.languages as any).__lowerCasePatched) {
+    return;
+  }
+  (monaco.languages as any).__lowerCasePatched = true;
+  const originRegister = monaco.languages.registerCompletionItemProvider.bind(monaco.languages);
+  monaco.languages.registerCompletionItemProvider = (languageId: string, provider: any) => {
+    const wrapped: any = { ...provider };
+    if (typeof provider.provideCompletionItems === 'function') {
+      wrapped.provideCompletionItems = async (...args: any[]) => {
+        const result = await provider.provideCompletionItems(...args);
+        const lowerCaseItem = (item: any) => {
+          if (item && typeof item.insertText === 'string') {
+            return { ...item, insertText: item.insertText.toLowerCase() };
+          }
+          return item;
+        };
+        if (!result) {
+          return result;
+        }
+        if (Array.isArray(result)) {
+          return result.map(lowerCaseItem);
+        }
+        if (result.suggestions) {
+          return { ...result, suggestions: result.suggestions.map(lowerCaseItem) };
+        }
+        return result;
+      };
+    }
+    return originRegister(languageId, wrapped);
+  };
+}
 
 export function register(language: string): Plugin {
   //@ts-ignore
@@ -45,6 +88,9 @@ export function register(language: string): Plugin {
     },
   };
   language = language || 'obmysql';
+  // Patch must run before plugin.setup(), since setup() registers the
+  // completion provider internally and we want our wrapper to take effect.
+  patchCompletionProviderToLowerCase();
   if (plugin) {
     if (language && !languages.includes(language)) {
       languages.push(language);
