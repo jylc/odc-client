@@ -53,6 +53,11 @@ export default function WorkspaceStore({ children }) {
   const [datasourceList, setDatasourceList] = useState<IDatasource[]>([]);
   const [projectList, setProjectList] = useState<IProject[]>([]);
   const [databaseList, setDatabaseList] = useState<IDatabase[]>([]);
+  /**
+   * 从项目页"登录数据库"进入时设置，作为一次性信号通知 SelectPanel 自动进入该项目并
+   * 保持 SelectPanel 打开（显示带返回箭头的项目内数据源视图）。进入后由 Project 组件清空。
+   */
+  const [autoEnterProjectId, setAutoEnterProjectId] = useState<number>(null);
 
   function setSelectProjectId(v: number) {
     _setSelectProjectId(v);
@@ -141,6 +146,8 @@ export default function WorkspaceStore({ children }) {
         databaseList,
         reloadDatabaseList,
         pollingDatabase,
+        autoEnterProjectId,
+        setAutoEnterProjectId,
       }}
     >
       <ActivityBarContext.Provider

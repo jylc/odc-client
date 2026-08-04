@@ -75,13 +75,16 @@ const Workspace: React.FC<WorkspaceProps> = (props: WorkspaceProps) => {
     const databaseId = toInteger(params.get('databaseId'));
     const datasourceId = toInteger(params.get('datasourceId'));
     if (projectId) {
-      resourceTreeContext?.setSelectTabKey(ResourceTreeTab.project);
-      resourceTreeContext?.setSelectProjectId(projectId);
       /**
-       * Sync the opened database to the resource tree so it can locate (expand the
-       * datasource group / highlight) the database after the SQL page is opened.
+       * 从项目页"登录数据库"进入时，侧边栏应停留在 SelectPanel 的项目内数据源视图
+       * （带返回箭头），与直接访问 SQL 控制台后手动进入项目的表现一致。
+       *
+       * 因此这里只设置一次性信号 autoEnterProjectId（由 SelectPanel 的 Project 子组件消费
+       * 后清空），不设置 selectProjectId/currentDatabaseId —— 后两者会被 Container 用来
+       * 关闭 SelectPanel 并切换到主资源树，正是我们要避免的。SQL 页面照常打开。
        */
-      databaseId && resourceTreeContext?.setCurrentDatabaseId(databaseId);
+      resourceTreeContext?.setSelectTabKey(ResourceTreeTab.project);
+      resourceTreeContext?.setAutoEnterProjectId?.(projectId);
       databaseId && openNewSQLPage(databaseId, 'project');
     } else if (datasourceId) {
       resourceTreeContext?.setSelectTabKey(ResourceTreeTab.datasource);

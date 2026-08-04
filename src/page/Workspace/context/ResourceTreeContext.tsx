@@ -39,6 +39,13 @@ interface IResourceTreeContext {
   databaseList: IDatabase[];
   reloadDatabaseList?: () => void;
   pollingDatabase?: () => void;
+  /**
+   * 一次性信号：从项目页"登录数据库"进入 SQL 窗口时设置，通知 SelectPanel 的 Project
+   * 子组件自动进入该项目的数据源列表视图（带返回箭头），并让 Container 保持 SelectPanel
+   * 打开。进入后由 Project 组件清空，避免重复触发。
+   */
+  autoEnterProjectId?: number;
+  setAutoEnterProjectId?: (v: number) => void;
 }
 
 const ResourceTreeContext = React.createContext<IResourceTreeContext>({

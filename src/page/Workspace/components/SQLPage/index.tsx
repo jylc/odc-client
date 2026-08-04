@@ -25,6 +25,7 @@ import { getKeyCodeValue } from '@/component/Input/Keymap/keycodemap';
 import { IEditor } from '@/component/MonacoEditor';
 import SaveSQLModal from '@/component/SaveSQLModal';
 import ScriptPage from '@/component/ScriptPage';
+import ObjectTreePanel from '@/component/ScriptPage/ObjectTreePanel';
 import SQLConfigContext from '@/component/SQLConfig/SQLConfigContext';
 import { ISQLLintReuslt } from '@/component/SQLLintResult/type';
 import { getPageTitleText } from '@/component/WindowManager/helper';
@@ -1169,6 +1170,7 @@ export class SQLPage extends Component<IProps, ISQLPageState> {
             // onOpenObjDetail: this.onOpenObjDetail,
           }}
           handleChangeSplitPane={this.handleChangeSplitPane}
+          objectTreePanel={<ObjectTreePanel session={session} />}
           Result={
             <Spin wrapperClassName={styles.spinWidth100} spinning={false}>
               <SQLResultSet

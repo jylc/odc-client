@@ -31,3 +31,70 @@
     }
   }
 }
+
+/**
+ * 左侧对象树面板容器：垂直 SplitPane 的第一栏。
+ */
+.objectTreePane {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--background-primary-color);
+}
+
+/**
+ * 编辑区宿主：绝对定位在工具栏/会话选择行之下、状态栏之上，
+ * 内部填充 SplitPane（带对象树）或单独的编辑器（不带对象树）。
+ */
+.editorHost {
+  position: absolute;
+  overflow: hidden;
+}
+
+/**
+ * SplitPane 右侧面板（对象树可见时）：纵向排列 工具栏 + 编辑器输入区。
+ * 工具栏仅覆盖编辑器宽度（在编辑器输入部分上方），不跨越左侧对象树。
+ */
+.editorRightPane {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--background-primary-color);
+}
+
+/**
+ * 编辑器输入区：填充右侧面板工具栏之下的剩余空间。
+ */
+.editorInputArea {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/**
+ * 对象树显隐切换按钮。固定在工具栏右上方区域，仅在 objectTreePanel 存在时渲染。
+ */
+.toggleObjectTreeBtn {
+  position: absolute;
+  top: 42px;
+  right: 8px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+  color: var(--text-color-secondary);
+  cursor: pointer;
+  background-color: var(--hover-color2);
+  border-radius: 4px;
+
+  &:hover {
+    color: var(--text-color-link);
+    background-color: var(--hover-color);
+  }
+}

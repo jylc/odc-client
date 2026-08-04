@@ -53,7 +53,7 @@ import {
 import classNames from 'classnames';
 import { EventDataNode } from 'antd/lib/tree';
 import { inject, observer } from 'mobx-react';
-import { forwardRef, useContext, useImperativeHandle, useMemo, useState } from 'react';
+import { forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import ResourceLayout from '../../Layout';
 import styles from './index.less';
 
@@ -111,7 +111,7 @@ export default inject(
     ) {
       const [searchKey, setSearchKey] = useState('');
       const context = useContext(ResourceTreeContext);
-      const { projectList } = context;
+      const { projectList, autoEnterProjectId, setAutoEnterProjectId } = context;
 
       const [view, setView] = useState<View>('projectList');
       const [selectedProject, setSelectedProject] = useState<IProject>(null);
@@ -209,7 +209,27 @@ export default inject(
         setSelectedProject(null);
         setDatasources([]);
         setTreeData([]);
+        /**
+         * 返回项目列表时清掉一次性信号，避免后续在项目列表中操作时被误判为"自动进入"。
+         */
+        setAutoEnterProjectId?.(null);
       }
+
+      /**
+       * 从项目页"登录数据库"进入时（autoEnterProjectId 被设置），自动进入该项目的数据源
+       * 列表视图（带返回箭头），与直接访问后手动点进项目的表现一致。进入后清空信号，
+       * 避免重复触发。
+       */
+      useEffect(() => {
+        if (!autoEnterProjectId || view !== 'projectList' || !projectList?.length) {
+          return;
+        }
+        const project = projectList.find((p) => p.id === autoEnterProjectId);
+        if (project) {
+          enterProject(project);
+        }
+        setAutoEnterProjectId?.(null);
+      }, [autoEnterProjectId, projectList, view]);
 
       function deleteDataSource(name: string, id: number) {
         Modal.confirm({

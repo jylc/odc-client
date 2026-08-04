@@ -57,6 +57,11 @@ interface IProps {
   enableFilter?: boolean;
   stateId?: string;
   onTitleClick?: () => void;
+  /**
+   * 展平数据库层级：把库的子节点（表/视图/函数/存储过程等对象类型根）直接作为顶层节点，
+   * 不再显示库本身。用于 SQL 编辑器内嵌的对象树（只关心当前库的对象，无需库这一层）。
+   */
+  flattenDatabase?: boolean;
 }
 
 const ResourceTree: React.FC<IProps> = function ({
@@ -69,6 +74,7 @@ const ResourceTree: React.FC<IProps> = function ({
   onTitleClick,
   reloadDatabase,
   pollingDatabase,
+  flattenDatabase,
   showTip = false,
   enableFilter,
   stateId,
@@ -129,6 +135,16 @@ const ResourceTree: React.FC<IProps> = function ({
         const dbSession = sessionManagerStore.sessionMap.get(dbSessionId);
         return DataBaseTreeData(dbSession, database, database?.id, true, searchValue);
       });
+
+    if (flattenDatabase && filteredDatabases.length) {
+      /**
+       * 展平数据库层级：把当前库的对象类型根（表/视图/函数/存储过程…）直接作为顶层节点，
+       * 不显示库本身。用于 SQL 编辑器内嵌对象树。
+       */
+      const databaseNodes = buildDatabaseNodes(filteredDatabases);
+      const children = databaseNodes.flatMap((node) => node.children || []);
+      return children;
+    }
 
     if (databaseFrom === 'project') {
       /**
@@ -264,17 +280,18 @@ const ResourceTree: React.FC<IProps> = function ({
 
   return (
     <div className={styles.resourceTree}>
-      <div className={styles.title}>
-        {tabKey ? (
-          <Space size={2} className={styles.label}>
-            {title}
-          </Space>
-        ) : (
-          <Space size={4} onClick={() => onTitleClick?.()} className={styles.label}>
-            {title}
-            <Icon style={{ verticalAlign: 'middle' }} component={SwapOutlined} />
-          </Space>
-        )}
+      {flattenDatabase ? null : (
+        <div className={styles.title}>
+          {tabKey ? (
+            <Space size={2} className={styles.label}>
+              {title}
+            </Space>
+          ) : (
+            <Space size={4} onClick={() => onTitleClick?.()} className={styles.label}>
+              {title}
+              <Icon style={{ verticalAlign: 'middle' }} component={SwapOutlined} />
+            </Space>
+          )}
         <span className={styles.titleAction}>
           <Space size={8} style={{ lineHeight: 1.5 }}>
             {enableFilter ? (
@@ -316,7 +333,8 @@ const ResourceTree: React.FC<IProps> = function ({
             />
           </Space>
         </span>
-      </div>
+        </div>
+      )}
       <div className={styles.search}>
         <DatabaseSearch
           onChange={(type, value) => {
