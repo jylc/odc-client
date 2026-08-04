@@ -19,7 +19,7 @@ import React, { useContext, useEffect } from 'react';
 import SessionContext from '../context';
 
 import ConnectionPopover from '@/component/ConnectionPopover';
-import Icon, { AimOutlined, DownOutlined, LoadingOutlined } from '@ant-design/icons';
+import Icon, { AimOutlined, DownOutlined, LoadingOutlined, StepBackwardOutlined, StepForwardOutlined } from '@ant-design/icons';
 import { Divider, Popover, Space, Spin } from 'antd';
 import styles from './index.less';
 
@@ -39,10 +39,25 @@ import SessionDropdown from './SessionDropdown';
 export default function SessionSelect({
   readonly,
   feature,
+  collapsible,
+  collapsed,
+  onToggleCollapse,
 }: {
   readonly?: boolean;
   dialectTypes?: ConnectionMode[];
   feature?: keyof IDataSourceModeConfig['features'];
+  /**
+   * 是否显示折叠图标（左侧）。仅在有内嵌对象树的编辑器（如 SQL 窗口）启用。
+   */
+  collapsible?: boolean;
+  /**
+   * 当前是否折叠（对象树隐藏）。true 时显示右箭头，false 时显示左箭头。
+   */
+  collapsed?: boolean;
+  /**
+   * 点击折叠图标时的回调。
+   */
+  onToggleCollapse?: () => void;
 }) {
   const context = useContext(SessionContext);
   const resourceTreeContext = useContext(ResourceTreeContext);
@@ -148,6 +163,21 @@ export default function SessionSelect({
     }
     return (
       <div className={styles.content}>
+        {collapsible ? (
+          <span
+            className={styles.collapseIcon}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleCollapse?.();
+            }}
+            title={formatMessage({
+              id: 'odc.component.SessionSelect.collapseObjectTree',
+              defaultMessage: collapsed ? '显示对象树' : '隐藏对象树',
+            })}
+          >
+            {collapsed ? <StepForwardOutlined /> : <StepBackwardOutlined />}
+          </span>
+        ) : null}
         {renderEnv()}
         <SessionDropdown filters={{ feature }}>
           <div>{databaseItem}</div>

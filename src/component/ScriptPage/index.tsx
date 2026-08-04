@@ -29,7 +29,6 @@ import { default as snippet, default as snippetStore } from '@/store/snippet';
 import editorUtils from '@/util/editor';
 import { getUnWrapedSnippetBody } from '@/util/snippet';
 import { Layout, message } from 'antd';
-import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { inject, observer } from 'mobx-react';
 import React, { PureComponent } from 'react';
 import SplitPane from 'react-split-pane';
@@ -82,6 +81,11 @@ interface IPageState {
    * 左侧对象树面板宽度（px），用于 SplitPane 的受控尺寸。
    */
   objectTreeWidth: number;
+  /**
+   * 是否正处于折叠/展开切换的动画过程中。仅在切换时为 true，给 pane1 加上宽度过渡；
+   * 拖拽分隔条时为 false，保证宽度立即跟随鼠标，不产生延迟。
+   */
+  treeAnimating: boolean;
 }
 
 @inject('settingStore')
@@ -94,6 +98,7 @@ export default class ScriptPage extends PureComponent<IProps> {
     /// resultHeight: RESULT_HEIGHT
     showObjectTree: true,
     objectTreeWidth: 240,
+    treeAnimating: false,
   };
 
   componentDidMount() {
@@ -121,22 +126,26 @@ export default class ScriptPage extends PureComponent<IProps> {
       showSessionSelect = true,
       objectTreePanel,
     } = this.props;
-    const { showObjectTree, objectTreeWidth } = this.state;
+    const { showObjectTree, objectTreeWidth, treeAnimating } = this.state;
     const isShowDebugStackBar = !!stackbar?.list?.length;
     /**
      * 左侧对象树面板是否存在且展开。为 true 时用垂直 SplitPane 把对象树与编辑区拆分，
      * 与截图一致；否则保持原有单栏布局，保证其它编辑器页面零影响。
      */
-    const showTreePane = !!objectTreePanel && showObjectTree;
+    /**
+     * 是否存在内嵌对象树面板（无论展开/折叠）。存在时工具栏移入右侧 pane（仅覆盖编辑器
+     * 宽度），对象树从会话行正下方开始；折叠时通过宽度过渡动画收起，仍保持该布局。
+     */
+    const hasObjectTreePane = !!objectTreePanel;
     /**
      * 编辑区顶部相对于 Content 的偏移。
-     * - 对象树可见时：工具栏移入右侧 pane（仅覆盖编辑器宽度），对象树从会话行正下方开始，
+     * - 有对象树面板时：工具栏移入右侧 pane（仅覆盖编辑器宽度），对象树从会话行正下方开始，
      *   故 editorHost 顶部只需让出会话行（+ 调试堆栈条）。
-     * - 对象树不可见时（含其它编辑器）：工具栏仍在顶部全宽，需让出会话行 + 工具栏（+ 堆栈条）。
+     * - 无对象树面板（含其它编辑器）：工具栏仍在顶部全宽，需让出会话行 + 工具栏（+ 堆栈条）。
      */
     const sessionSelectHeight = showSessionSelect ? 32 : 0;
     const debugStackHeight = isShowDebugStackBar ? 28 : 0;
-    const editorHostTop = showTreePane
+    const editorHostTop = hasObjectTreePane
       ? sessionSelectHeight + debugStackHeight
       : EDITOR_TOOLBAR_HEIGHT + debugStackHeight + sessionSelectHeight;
     const editorHostBottom = statusBar && statusBar.status ? 32 : 0;
@@ -221,27 +230,23 @@ export default class ScriptPage extends PureComponent<IProps> {
       >
         <Content style={{ position: 'relative' }}>
           {showSessionSelect && (
-            <SessionSelect dialectTypes={dialectTypes} readonly={sessionSelectReadonly} />
-          )}
-          {objectTreePanel ? (
-            <span
-              className={styles.toggleObjectTreeBtn}
-              onClick={() => {
-                this.setState({ showObjectTree: !showObjectTree }, () => {
-                  /**
-                   * 切换布局后通知 Monaco 重新测量尺寸（automaticLayout 依赖 resize）。
-                   */
+            <SessionSelect
+              dialectTypes={dialectTypes}
+              readonly={sessionSelectReadonly}
+              collapsible={!!objectTreePanel}
+              collapsed={!!objectTreePanel && !showObjectTree}
+              onToggleCollapse={() => {
+                /**
+                 * 切换时开启宽度过渡（滑动动画），动画结束后关闭；拖拽分隔条时 onChange 会
+                 * 立即把 treeAnimating 置回 false，保证拖拽宽度立即跟随鼠标。
+                 */
+                this.setState({ showObjectTree: !showObjectTree, treeAnimating: true }, () => {
                   window.dispatchEvent(new Event('resize'));
                 });
+                window.setTimeout(() => this.setState({ treeAnimating: false }), 220);
               }}
-              title={formatMessage({
-                id: 'odc.component.ScriptPage.objectTree.toggle',
-                defaultMessage: showObjectTree ? '隐藏对象树' : '显示对象树',
-              })}
-            >
-              {showObjectTree ? <LeftOutlined /> : <RightOutlined />}
-            </span>
-          ) : null}
+            />
+          )}
 
           {isShowDebugStackBar ? (
             <div className={styles.stackList}>
@@ -260,26 +265,35 @@ export default class ScriptPage extends PureComponent<IProps> {
               })}
             </div>
           ) : null}
-          {showTreePane ? (
+          {objectTreePanel ? (
             <div
               className={styles.editorHost}
               style={{ top: editorHostTop, bottom: editorHostBottom, left: 0, right: 0 }}
             >
               <SplitPane
                 split="vertical"
-                minSize={160}
+                minSize={showObjectTree ? 160 : 0}
                 maxSize={520}
-                size={objectTreeWidth}
+                size={showObjectTree ? objectTreeWidth : 0}
+                allowResize={showObjectTree}
                 onChange={(size) => {
-                  this.setState({ objectTreeWidth: size });
                   /**
-                   * 拖拽分隔条时同步触发 resize，让 Monaco 跟随重排。
+                   * 拖拽分隔条：立即更新宽度并关闭过渡，保证宽度立即跟随鼠标，不产生延迟。
                    */
+                  this.setState({ objectTreeWidth: size, treeAnimating: false });
                   window.dispatchEvent(new Event('resize'));
                 }}
-                pane1Style={{ overflow: 'hidden' }}
+                pane1Style={{
+                  overflow: 'hidden',
+                  /**
+                   * 仅在折叠/展开切换时（treeAnimating）加宽度过渡，实现滑动动画；
+                   * 拖拽时无过渡，分隔条立即跟随鼠标。
+                   */
+                  transition: treeAnimating ? 'width 0.2s ease' : 'none',
+                }}
                 pane2Style={{ position: 'relative', overflow: 'hidden' }}
                 resizerStyle={{
+                  display: showObjectTree ? 'block' : 'none',
                   background: 'transparent',
                   width: '4px',
                   cursor: 'col-resize',
