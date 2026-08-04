@@ -20,6 +20,13 @@ let publicPath = '/';
 
 const define = defineConfig();
 
+/**
+ * 本地开发可配置的 ODC Server 代理地址
+ * 默认指向对内 Site 应用开发环境；本地联调时用环境变量覆盖，例如：
+ *   ODC_PROXY_TARGET=http://127.0.0.1:8990 npm run dev
+ */
+const apiProxyTarget = process.env.ODC_PROXY_TARGET || 'http://dev.odc-local.net:7001/proxy/96';
+
 const config = {
   mock: false,
   publicPath,
@@ -48,17 +55,17 @@ const config = {
   proxy: {
     // 本地开发或者对内 Site 应用的开发环境的代理配置
     '/api/v1/webSocket/obclient': {
-      target: 'http://dev.odc-local.net:7001/proxy/96',
+      target: 'http://127.0.0.1:8990/',
       ws: true,
     },
     '/api/': {
-      target: 'http://dev.odc-local.net:7001/proxy/96',
+      target: 'http://127.0.0.1:8990/',
     },
     '/oauth2/': {
-      target: 'http://dev.odc-local.net:7001/proxy/96',
+      target: 'http://127.0.0.1:8990/',
     },
     '/login/': {
-      target: 'http://dev.odc-local.net:7001/proxy/96',
+      target: 'http://127.0.0.1:8990/',
     }
   },
 

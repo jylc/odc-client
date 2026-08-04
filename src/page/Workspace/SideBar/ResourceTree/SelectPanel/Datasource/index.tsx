@@ -28,6 +28,7 @@ import NewDatasourceButton from '@/page/Datasource/Datasource/NewDatasourceDrawe
 import ResourceTreeContext from '@/page/Workspace/context/ResourceTreeContext';
 import { DataSourceStatusStore } from '@/store/datasourceStatus';
 import login from '@/store/login';
+import { isClient } from '@/util/env';
 import { formatMessage } from '@/util/intl';
 import { PlusOutlined } from '@ant-design/icons';
 import { Badge, Button, Dropdown, Input, message, Modal, Popover, Tree, TreeDataNode } from 'antd';
@@ -193,7 +194,7 @@ export default inject('dataSourceStatusStore')(
                   size="small"
                 />
 
-                {login.isPrivateSpace() ? (
+                {login.isPrivateSpace() || isClient() ? (
                   <NewDatasourceButton onSuccess={() => context?.reloadDatasourceList()}>
                     <Button
                       size="small"

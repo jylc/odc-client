@@ -77,10 +77,16 @@ const Workspace: React.FC<WorkspaceProps> = (props: WorkspaceProps) => {
     if (projectId) {
       resourceTreeContext?.setSelectTabKey(ResourceTreeTab.project);
       resourceTreeContext?.setSelectProjectId(projectId);
+      /**
+       * Sync the opened database to the resource tree so it can locate (expand the
+       * datasource group / highlight) the database after the SQL page is opened.
+       */
+      databaseId && resourceTreeContext?.setCurrentDatabaseId(databaseId);
       databaseId && openNewSQLPage(databaseId, 'project');
     } else if (datasourceId) {
       resourceTreeContext?.setSelectTabKey(ResourceTreeTab.datasource);
       resourceTreeContext?.setSelectDatasourceId(datasourceId);
+      databaseId && resourceTreeContext?.setCurrentDatabaseId(databaseId);
       databaseId && openNewSQLPage(databaseId, 'datasource');
     } else {
       return;

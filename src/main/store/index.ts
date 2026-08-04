@@ -26,14 +26,15 @@ export class PathnameStore {
   public static hash: string = '';
 
   public static getUrl = () => {
+    const isDevelopment = process.env.NODE_ENV === 'development';
     const href = url.format({
-      pathname: PathnameStore.pathname,
-      hash: PathnameStore.hash,
+      // 开发模式（dev:client）下首页直接打开 SQL 工作台；schema 唤起（hash 已设置）时保持原逻辑
+      pathname: isDevelopment ? '/' : PathnameStore.pathname,
+      hash: isDevelopment && !PathnameStore.hash ? '#/sqlworkspace' : PathnameStore.hash,
       protocol: PathnameStore.PROTOCOL,
       slashes: true,
       hostname: PathnameStore.hostname,
-      port:
-        process.env.NODE_ENV === 'development' ? '8000' : MainServer.getInstance().port.toString(),
+      port: isDevelopment ? '8000' : MainServer.getInstance().port.toString(),
     });
     log.info('renderer url: ', href);
     return href;

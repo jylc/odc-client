@@ -25,6 +25,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } 
 import { loadNode } from './helper';
 import styles from './index.less';
 import { DataBaseTreeData } from './Nodes/database';
+import StatusIcon from '@/component/StatusIcon/DataSourceIcon';
 import TreeNodeMenu from './TreeNodeMenu';
 import { ResourceNodeType, TreeDataNode } from './type';
 import tracert from '@/util/tracert';
@@ -33,6 +34,7 @@ import Icon, { SwapOutlined } from '@ant-design/icons';
 import Reload from '@/component/Button/Reload';
 import DatasourceFilter from './DatasourceFilter';
 import { ConnectType, DbObjectType } from '@/d.ts';
+import { IDatasource } from '@/d.ts/datasource';
 import useTreeState from './useTreeState';
 import DatabaseSearch from './DatabaseSearch';
 import { useParams } from '@umijs/max';
@@ -101,21 +103,9 @@ const ResourceTree: React.FC<IProps> = function ({
     };
   }, []);
 
-  useEffect(() => {
-    modalStore.changeDatabaseSearchModalData(true, setDatabaseSelected);
-  }, [databases]);
-
-  const setDatabaseSelected = (key) => {
-    setExpandedKeys([key]);
-    treeContext.setCurrentDatabaseId(key);
-    // 滚动到指定高度
-    const findIndex = databases.findIndex((i) => i.id === key);
-    treeRef?.current?.scrollTo({ top: findIndex * 28 });
-  };
-
   const treeData: TreeDataNode[] = (() => {
-    const root = databases
-      ?.filter((db) => {
+    const filteredDatabases =
+      databases?.filter((db) => {
         if (
           searchValue?.type === DbObjectType.database &&
           !db.name.toLowerCase()?.includes(searchValue?.value?.toLowerCase())
@@ -130,20 +120,107 @@ const ResourceTree: React.FC<IProps> = function ({
           !(envs?.length && !envs.includes(db.environment?.id)) &&
           !(connectTypes?.length && !connectTypes.includes(db.dataSource?.type))
         );
-      })
-      ?.map((database) => {
+      }) || [];
+
+    const buildDatabaseNodes = (list: IDatabase[]) =>
+      list.map((database) => {
         const dbId = database.id;
         const dbSessionId = sessionIds[dbId];
         const dbSession = sessionManagerStore.sessionMap.get(dbSessionId);
         return DataBaseTreeData(dbSession, database, database?.id, true, searchValue);
       });
-    return root || [];
+
+    if (databaseFrom === 'project') {
+      /**
+       * Project mode groups databases by datasource so the tree shows
+       * 项目 → 数据源 → 库, matching the SelectPanel's project tree.
+       */
+      const groups = new Map<number, { dataSource: IDatasource; databases: IDatabase[] }>();
+      filteredDatabases.forEach((database) => {
+        const dataSource = database.dataSource;
+        if (!dataSource) {
+          return;
+        }
+        const group = groups.get(dataSource.id) || { dataSource, databases: [] };
+        group.databases.push(database);
+        groups.set(dataSource.id, group);
+      });
+      return [...groups.values()].map(({ dataSource, databases }) => ({
+        title: dataSource.name,
+        key: `ds-${dataSource.id}`,
+        type: ResourceNodeType.Datasource,
+        data: dataSource,
+        icon: <StatusIcon item={dataSource} />,
+        isLeaf: false,
+        children: buildDatabaseNodes(databases),
+      }));
+    }
+
+    return buildDatabaseNodes(filteredDatabases);
   })();
+
+  const setDatabaseSelected = (key) => {
+    const group = treeData.find((node) =>
+      node.children?.some((child) => child.key === key),
+    );
+    setExpandedKeys(group ? [group.key, key] : [key]);
+    treeContext.setCurrentDatabaseId(key);
+    treeRef?.current?.scrollTo({ key });
+  };
+
+  useEffect(() => {
+    modalStore.changeDatabaseSearchModalData(true, setDatabaseSelected);
+  }, [databases]);
+
+  /**
+   * When the current database changes (e.g. opening the SQL page via 登录数据库, or
+   * selecting one from the search modal), locate it in the tree: expand its datasource
+   * group and scroll it into view, so the sidebar follows the opened editor page.
+   */
+  const locatedDatabaseIdRef = useRef<number>(null);
+  useEffect(() => {
+    const databaseId = treeContext.currentDatabaseId;
+    if (!databaseId) {
+      locatedDatabaseIdRef.current = null;
+      return;
+    }
+    if (locatedDatabaseIdRef.current === databaseId) {
+      return;
+    }
+    const group = treeData.find((node) =>
+      node.children?.some((child) => child.key === databaseId),
+    );
+    const exists = group || treeData.some((node) => node.key === databaseId);
+    if (!exists) {
+      /**
+       * The database list may not be loaded yet; retry on the next treeData change.
+       */
+      return;
+    }
+    locatedDatabaseIdRef.current = databaseId;
+    if (group) {
+      const keys = [...expandedKeys];
+      if (!keys.includes(group.key)) {
+        keys.push(group.key);
+      }
+      setExpandedKeys(keys);
+    }
+    setTimeout(() => {
+      treeRef?.current?.scrollTo({ key: databaseId });
+    }, 0);
+  }, [treeContext.currentDatabaseId, treeData]);
 
   const loadData = useCallback(
     async (treeNode: EventDataNode<any> & TreeDataNode) => {
       const { type, data } = treeNode;
       switch (type) {
+        case ResourceNodeType.Datasource: {
+          /**
+           * In project mode datasource nodes are grouped from the already fetched
+           * database list, so there is nothing to load here.
+           */
+          break;
+        }
         case ResourceNodeType.Database: {
           const dbId = (data as IDatabase).id;
           const dbSession =

@@ -80,10 +80,11 @@ export default function useTreeState(id: string, options?: IUseTreeStateOptions)
         treeContext.setCurrentDatabaseId(cid);
       }
     }
-    if (expanded && !loadedKeys?.includes(node.key)) {
+    if (expanded && !node.children?.length && !loadedKeys?.includes(node.key)) {
       /**
        * 只允许在onload内部修改expandedKeys
        * 触发onload可以保证node是加载成功的，并且在loadedkeys中，避免请求失败无限循环
+       * 已有子节点的节点（非懒加载，如项目模式下按数据源分组的数据源节点）可以直接展开。
        */
       return;
     }
