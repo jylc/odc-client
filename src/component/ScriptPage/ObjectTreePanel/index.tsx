@@ -19,7 +19,7 @@ import ResourceTree from '@/page/Workspace/SideBar/ResourceTree';
 import TreeStateStore, { ITreeStateCache } from '@/page/Workspace/SideBar/ResourceTree/TreeStateStore';
 import SessionStore from '@/store/sessionManager/session';
 import { Space } from 'antd';
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import styles from './index.less';
 
 interface IProps {
@@ -32,6 +32,11 @@ interface IProps {
    * 数据库轮询回调，透传给 ResourceTree 用于数据库节点状态刷新。
    */
   pollingDatabase?: () => void;
+  /**
+   * 对象树数据就绪回调：session 与数据库信息齐备、即将渲染树时触发一次。
+   * ScriptPage 用它在"加载完成后展开"，实现打开时先折叠、加载完再展开的效果。
+   */
+  onReady?: () => void;
 }
 
 /**
@@ -41,11 +46,12 @@ interface IProps {
  * 并通过预填 TreeStateStore 的 sessionIds 缓存，让 ResourceTree 的懒加载逻辑
  * 命中编辑器已有的会话，从而避免为同一数据库创建第二个后端连接。
  */
-const ObjectTreePanel: React.FC<IProps> = function ({ session, pollingDatabase }) {
+const ObjectTreePanel: React.FC<IProps> = function ({ session, pollingDatabase, onReady }) {
   const noop = () => {};
   const odcDatabase = session?.odcDatabase;
   const dbId = odcDatabase?.id;
   const sessionId = session?.sessionId;
+  const ready = !!(odcDatabase && dbId && sessionId);
 
   /**
    * 每个面板实例使用独立的缓存，避免不同 SQL 页签之间互相污染展开/加载状态。
@@ -66,7 +72,17 @@ const ObjectTreePanel: React.FC<IProps> = function ({ session, pollingDatabase }
     entry.sessionIds[dbId] = sessionId;
   }
 
-  if (!odcDatabase || !dbId || !sessionId) {
+  /**
+   * 数据就绪（session + 库信息齐备）后通知父组件，使其从"初始折叠"切换到"展开"，
+   * 实现"打开 SQL 窗口先折叠、加载完成再展开"的效果。
+   */
+  useEffect(() => {
+    if (ready) {
+      onReady?.();
+    }
+  }, [ready]);
+
+  if (!ready) {
     return null;
   }
 

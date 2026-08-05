@@ -96,9 +96,31 @@ export default class ScriptPage extends PureComponent<IProps> {
     templateName: '',
     offset: null,
     /// resultHeight: RESULT_HEIGHT
-    showObjectTree: true,
+    /**
+     * 对象树初始折叠：打开 SQL 窗口时先收起，待数据就绪（onReady）后再展开，
+     * 避免加载过程中对象树空窗闪烁。仅在存在 objectTreePanel 时生效。
+     */
+    showObjectTree: false,
     objectTreeWidth: 240,
     treeAnimating: false,
+  };
+
+  /**
+   * 对象树数据就绪回调：数据齐备后以滑动动画展开对象树。
+   * 先开启过渡（此时宽度仍为 0），下一帧再展开宽度，让浏览器记录到 width=0 的起始态，
+   * 从而触发从 0 到目标宽度的滑动动画。
+   */
+  handleObjectTreeReady = () => {
+    this.setState({ treeAnimating: true }, () => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          this.setState({ showObjectTree: true }, () => {
+            window.dispatchEvent(new Event('resize'));
+          });
+        });
+      });
+    });
+    window.setTimeout(() => this.setState({ treeAnimating: false }), 240);
   };
 
   componentDidMount() {
@@ -127,6 +149,15 @@ export default class ScriptPage extends PureComponent<IProps> {
       objectTreePanel,
     } = this.props;
     const { showObjectTree, objectTreeWidth, treeAnimating } = this.state;
+    /**
+     * 给对象树面板注入 onReady 回调：数据就绪后由 ScriptPage 触发滑动展开。
+     * 通过 cloneElement 注入，避免要求各调用方（如 SQLPage）自行传递。
+     */
+    const objectTreePanelWithReady = objectTreePanel
+      ? React.cloneElement(objectTreePanel as React.ReactElement, {
+          onReady: this.handleObjectTreeReady,
+        })
+      : null;
     const isShowDebugStackBar = !!stackbar?.list?.length;
     /**
      * 左侧对象树面板是否存在且展开。为 true 时用垂直 SplitPane 把对象树与编辑区拆分，
@@ -299,7 +330,7 @@ export default class ScriptPage extends PureComponent<IProps> {
                   cursor: 'col-resize',
                 }}
               >
-                <div className={styles.objectTreePane}>{objectTreePanel}</div>
+                <div className={styles.objectTreePane}>{objectTreePanelWithReady}</div>
                 {/**
                  * 右侧面板：工具栏在编辑器正上方，仅覆盖编辑器宽度（与截图一致）。
                  */}
