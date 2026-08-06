@@ -250,12 +250,41 @@ export class SQLStore {
           });
           const resultSet = this.resultSets.get(pageKey);
           if (resultSet) {
-            const lockedResultSets = resultSet.filter((r) => r.locked); // @ts-ignore
-            this.resultSets.set(pageKey, [
-              ...lockedResultSets,
+            const lockedResultSets = resultSet.filter((r) => r.locked);
+            /**
+             * 结果集展示模式：
+             * - OVERWRITE（默认）：清掉未锁定结果集，用本次结果替换。
+             * - APPEND：保留未锁定结果集，本次结果追加在其后（需手动关闭页签）。
+             */
+            const isAppend =
+              setting.configurations?.['odc.sqlexecute.querySqlResultDisplayMode'] === 'APPEND';
+            const unlockedResultSets = isAppend
+              ? resultSet.filter((r) => !r.locked && r.type !== 'LOG')
+              : [];
+            const newResultSets = generateResultSetColumns(
+              info.results,
+              session?.connection?.dialectType,
+            ).filter(Boolean);
+            const newResultSetArray = [
               this.getLogTab(info),
-              ...generateResultSetColumns(info.results, session?.connection?.dialectType),
-            ]);
+              ...lockedResultSets,
+              ...unlockedResultSets,
+              ...newResultSets,
+            ];
+            // @ts-ignore
+            this.resultSets.set(pageKey, newResultSetArray);
+            /**
+             * 执行完成后定位：
+             * - 本次有结果集：定位到最新结果集页签（APPEND 为最后一个，OVERWRITE 为唯一一个）。
+             * - 本次无结果集（DDL/commit 等）：定位到日志页签展示执行记录。
+             */
+            if (newResultSets?.length) {
+              const lastResult = newResultSets[newResultSets.length - 1];
+              this.setActiveTab(pageKey, lastResult?.uniqKey);
+            } else {
+              const logKey = this.getLogTab(info)?.uniqKey;
+              this.setActiveTab(pageKey, logKey);
+            }
           }
         });
       };
@@ -339,8 +368,20 @@ export class SQLStore {
   private initLog(pageKey: string, info: IExecutingInfo) {
     const resultSet = this.resultSets.get(pageKey);
     const lockedResultSets = resultSet.filter((r) => r.locked);
-    this.resultSets.set(pageKey, [...lockedResultSets, this.getLogTab(info)]);
-    this.setActiveTab(pageKey, this.resultSets.get(pageKey)?.find((i) => i.type == 'LOG')?.uniqKey);
+    /**
+     * APPEND 模式：保留未锁定的结果集页签（排除旧日志页签），日志页签放在最前。
+     * OVERWRITE 模式（默认）：清掉所有未锁定结果集，只放日志页签。
+     */
+    const isAppend =
+      setting.configurations?.['odc.sqlexecute.querySqlResultDisplayMode'] === 'APPEND';
+    const unlockedResultSets = isAppend
+      ? resultSet.filter((r) => !r.locked && r.type !== 'LOG')
+      : [];
+    this.resultSets.set(pageKey, [
+      this.getLogTab(info),
+      ...lockedResultSets,
+      ...unlockedResultSets,
+    ]);
   }
 
   public getLogTab(record?: IExecutingInfo): IResultSet {
@@ -670,8 +711,15 @@ export class SQLStore {
 
   public getFirstUnlockedResultKey(pageKey: string) {
     const resultSet = this.resultSets.get(pageKey);
+    const unlockedResults = resultSet?.filter((r) => !r.locked && r.type !== 'LOG') || [];
+    /**
+     * APPEND 模式：返回最后一个（最新）结果集，保证执行后定位到最新结果；
+     * OVERWRITE 模式：只有一个未锁定结果集，返回它即可。
+     */
+    const isAppend =
+      setting.configurations?.['odc.sqlexecute.querySqlResultDisplayMode'] === 'APPEND';
     return (
-      resultSet?.find((r) => !r.locked && r.type !== 'LOG')?.uniqKey ||
+      (isAppend ? unlockedResults[unlockedResults.length - 1] : unlockedResults[0])?.uniqKey ||
       resultSet?.find((r) => !r.locked && r.type === 'LOG')?.uniqKey
     );
   }

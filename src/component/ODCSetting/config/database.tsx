@@ -204,6 +204,40 @@ const databaseSettings: IODCSetting[] = [
   },
   {
     label: formatMessage({
+      id: 'src.component.ODCSetting.config.querySqlResultDisplayMode',
+      defaultMessage: '结果集展示',
+    }), //'结果集展示'
+    key: 'odc.sqlexecute.querySqlResultDisplayMode',
+    group: databaseGroup,
+    secondGroup: databaseResultsetGroup,
+    storeType: 'server',
+    render: (value, onChange) => {
+      return (
+        <RadioItem
+          options={[
+            {
+              label: formatMessage({
+                id: 'src.component.ODCSetting.config.querySqlResultDisplayMode.overwrite',
+                defaultMessage: '覆盖',
+              }),
+              value: 'OVERWRITE',
+            },
+            {
+              label: formatMessage({
+                id: 'src.component.ODCSetting.config.querySqlResultDisplayMode.append',
+                defaultMessage: '追加',
+              }),
+              value: 'APPEND',
+            },
+          ]}
+          value={value}
+          onChange={onChange}
+        />
+      );
+    },
+  },
+  {
+    label: formatMessage({
       id: 'src.component.ODCSetting.config.90CA6EA7',
       defaultMessage: '开启全链路诊断',
     }), //'开启全链路诊断'
