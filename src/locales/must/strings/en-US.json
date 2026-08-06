@@ -2667,6 +2667,7 @@
   "odc.Loading.WorkSpacePageLoading.Connecting": "Connecting…",
   "odc.component.ResourceSelector.IncludingDataSourcesProjectsRoles": "Including management permissions on data sources, projects, roles, and users, such as the permissions to create, manage, edit, and view these items.",
   "odc.SessionContextWrap.SessionSelect.SelectADatabase": "Select a database",
+  "odc.component.SessionSelect.collapseObjectTree": "Show/Hide object tree",
   "odc.NewSSODrawerButton.SSOForm.OauthInformation": "OAuth Information",
   "odc.Datasource.NewDatasourceDrawer.NewButton.CreateADataSource": "Create Data Source",
   "odc.component.DetailContent.CreationTime": "Created At",

@@ -186,7 +186,7 @@ const TreeNodeMenu = (props: IProps) => {
               return null;
             }
             return (
-              <Tooltip title={item.text}>
+              <Tooltip title={item.text} key={item.key}>
                 <div
                   onClick={(e) => {
                     e.stopPropagation();

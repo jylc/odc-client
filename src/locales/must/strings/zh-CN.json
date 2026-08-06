@@ -2956,6 +2956,7 @@
   "odc.component.ResourceSelector.const.RiskIdentificationRules": "风险识别规则",
   "odc.NewSSODrawerButton.SSOForm.OauthInformation": "OAUTH 信息",
   "odc.SessionContextWrap.SessionSelect.SelectADatabase": "请选择数据库",
+  "odc.component.SessionSelect.collapseObjectTree": "显示/隐藏对象树",
   "odc.Datasource.NewDatasourceDrawer.NewButton.CreateADataSource": "新建数据源",
   "odc.Datasource.Info.CharacterEncoding": "字符编码",
   "odc.MaskingAlgorithm.components.ViewMaskingAlgorithmDrawer.NotEnabled": "未启用",

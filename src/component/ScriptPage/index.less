@@ -98,3 +98,17 @@
     background-color: var(--hover-color);
   }
 }
+
+/**
+ * 对象树与编辑器之间的分隔条（react-split-pane 的 Resizer）。
+ * 基础态在 resizerStyle 内联设为分割线颜色；hover/拖拽时高亮为主色，便于识别可拖拽区域。
+ */
+:global {
+  .editorHost > .SplitPane > .Resizer.vertical {
+    &:hover,
+    &.active,
+    &:active {
+      background: var(--primary-color) !important;
+    }
+  }
+}

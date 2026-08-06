@@ -40,7 +40,8 @@ export default inject(
     const { tabKey, datasourceId } = useParams<{ tabKey: string; datasourceId: string }>();
     const [selectPanelOpen, setSelectPanelOpen] = useState<boolean>(!tabKey);
     const resourcetreeContext = useContext(ResourceTreeContext);
-    const { selectProjectId, selectDatasourceId, currentDatabaseId } = resourcetreeContext;
+    const { selectProjectId, selectDatasourceId, currentDatabaseId, autoEnterProjectId } =
+      resourcetreeContext;
 
     const cacheRef = useRef<ITreeStateCache>({});
 
@@ -72,10 +73,15 @@ export default inject(
     }, [selectProjectId, selectDatasourceId]);
 
     useEffect(() => {
-      if (currentDatabaseId) {
+      /**
+       * currentDatabaseId 有值时关闭 SelectPanel 切到主资源树；但当 autoEnterProjectId
+       * 存在（从项目页"登录数据库"进入）时，需保持 SelectPanel 打开以显示项目内数据源视图，
+       * 此时由 Project 树内部根据 currentDatabaseId 自动定位数据库。
+       */
+      if (currentDatabaseId && !autoEnterProjectId) {
         setSelectPanel(false);
       }
-    }, [currentDatabaseId]);
+    }, [currentDatabaseId, autoEnterProjectId]);
 
     if (loading) {
       return (

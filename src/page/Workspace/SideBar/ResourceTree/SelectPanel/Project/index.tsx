@@ -53,7 +53,7 @@ import {
 import classNames from 'classnames';
 import { EventDataNode } from 'antd/lib/tree';
 import { inject, observer } from 'mobx-react';
-import { forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import { forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import ResourceLayout from '../../Layout';
 import styles from './index.less';
 
@@ -111,7 +111,7 @@ export default inject(
     ) {
       const [searchKey, setSearchKey] = useState('');
       const context = useContext(ResourceTreeContext);
-      const { projectList, autoEnterProjectId, setAutoEnterProjectId } = context;
+      const { projectList, autoEnterProjectId, setAutoEnterProjectId, currentDatabaseId, setCurrentDatabaseId } = context;
 
       const [view, setView] = useState<View>('projectList');
       const [selectedProject, setSelectedProject] = useState<IProject>(null);
@@ -147,9 +147,15 @@ export default inject(
       const stateId = selectedProject
         ? `project-ds-tree-${selectedProject.id}-${entrySeq}`
         : 'project-ds-tree';
-      const { expandedKeys, loadedKeys, onExpand, onLoad } = useTreeState(stateId, {
+      const { expandedKeys, loadedKeys, onExpand, onLoad, setExpandedKeys } = useTreeState(stateId, {
         setCurrentDatabaseOnExpand: false,
       });
+
+      /**
+       * 数据库自动定位用的 ref：treeRef 用于 scrollTo，locatedDatabaseIdRef 避免重复定位。
+       */
+      const treeRef = useRef(null);
+      const locatedDatabaseIdRef = useRef<number>(null);
 
       useImperativeHandle(
         ref,
@@ -209,16 +215,21 @@ export default inject(
         setSelectedProject(null);
         setDatasources([]);
         setTreeData([]);
+        locatedDatabaseIdRef.current = null;
         /**
-         * 返回项目列表时清掉一次性信号，避免后续在项目列表中操作时被误判为"自动进入"。
+         * 返回项目列表时清掉一次性信号与定位标记，避免残留。
          */
         setAutoEnterProjectId?.(null);
+        setCurrentDatabaseId?.(null);
       }
 
       /**
        * 从项目页"登录数据库"进入时（autoEnterProjectId 被设置），自动进入该项目的数据源
-       * 列表视图（带返回箭头），与直接访问后手动点进项目的表现一致。进入后清空信号，
-       * 避免重复触发。
+       * 列表视图（带返回箭头），与直接访问后手动点进项目的表现一致。
+       *
+       * 注意：进入后**不清空** autoEnterProjectId。Container 依赖它保持 SelectPanel 打开
+       * （不因 currentDatabaseId 切到主资源树）。仅在 backToProjectList 时才清空。
+       * 重复触发由 view !== 'projectList' 守卫避免。
        */
       useEffect(() => {
         if (!autoEnterProjectId || view !== 'projectList' || !projectList?.length) {
@@ -228,8 +239,62 @@ export default inject(
         if (project) {
           enterProject(project);
         }
-        setAutoEnterProjectId?.(null);
       }, [autoEnterProjectId, projectList, view]);
+
+      /**
+       * 自动定位数据库：从项目页"登录数据库"进入时，currentDatabaseId 被设置。
+       * 在数据源列表加载后，找到目标数据库所属的数据源节点（含该 databaseId 子节点），
+       * 展开该数据源（触发 loadData 加载数据库列表），待子节点出现后高亮并滚动定位。
+       */
+      useEffect(() => {
+        if (!currentDatabaseId || view !== 'datasourceList' || !treeData?.length) {
+          return;
+        }
+        if (locatedDatabaseIdRef.current === currentDatabaseId) {
+          return;
+        }
+        /**
+         * 在 treeData 中查找：哪个数据源节点下已有目标数据库子节点（loadData 已完成）。
+         */
+        let datasourceNode = null;
+        for (const node of treeData) {
+          if (node.children?.some((child) => child.key === currentDatabaseId)) {
+            datasourceNode = node;
+            break;
+          }
+        }
+        if (datasourceNode) {
+          /**
+           * 数据库子节点已加载：展开数据源（确保可见）并高亮目标数据库。
+           */
+          locatedDatabaseIdRef.current = currentDatabaseId;
+          const keys = [...expandedKeys];
+          if (!keys.includes(datasourceNode.key)) {
+            keys.push(datasourceNode.key);
+          }
+          setExpandedKeys(keys);
+          setTimeout(() => {
+            treeRef?.current?.scrollTo({ key: currentDatabaseId });
+          }, 0);
+        } else {
+          /**
+           * 数据库子节点尚未加载：展开可能包含该库的数据源节点，触发 loadData。
+           * 这里展开所有尚未加载的数据源（数据源数量通常很少），让 rc-tree 触发 loadData
+           * 加载数据库列表，下一次 treeData 更新时本 effect 会重新执行并定位。
+           */
+          const keys = [...expandedKeys];
+          let changed = false;
+          treeData.forEach((node) => {
+            if (node.type === ResourceNodeType.Datasource && !node.children?.length && !keys.includes(node.key)) {
+              keys.push(node.key);
+              changed = true;
+            }
+          });
+          if (changed) {
+            setExpandedKeys(keys);
+          }
+        }
+      }, [currentDatabaseId, treeData, view, expandedKeys]);
 
       function deleteDataSource(name: string, id: number) {
         Modal.confirm({
@@ -621,6 +686,7 @@ export default inject(
                 <Spin spinning={dsLoading}>
                   {filteredTreeData?.length ? (
                     <Tree
+                      ref={treeRef}
                       className={styles.tree}
                       showIcon
                       expandAction="click"
@@ -631,6 +697,7 @@ export default inject(
                       loadedKeys={loadedKeys}
                       onExpand={onExpand}
                       onLoad={onLoad}
+                      selectedKeys={currentDatabaseId ? [currentDatabaseId] : []}
                     />
                   ) : (
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />

@@ -325,9 +325,15 @@ export default class ScriptPage extends PureComponent<IProps> {
                 pane2Style={{ position: 'relative', overflow: 'hidden' }}
                 resizerStyle={{
                   display: showObjectTree ? 'block' : 'none',
-                  background: 'transparent',
-                  width: '4px',
+                  /**
+                   * 拖拽热区保持较宽（8px）便于操作，但视觉上只在中间渲染一条 1px 的浅灰
+                   * 细线（两侧透明），与设计稿一致。拖拽时由 less 规则高亮整条热区。
+                   */
+                  width: '8px',
                   cursor: 'col-resize',
+                  background:
+                    'linear-gradient(to right, transparent 0, transparent 3.5px, var(--neutral-grey7-color) 3.5px, var(--neutral-grey7-color) 4.5px, transparent 4.5px)',
+                  transition: 'background 0.15s ease',
                 }}
               >
                 <div className={styles.objectTreePane}>{objectTreePanelWithReady}</div>

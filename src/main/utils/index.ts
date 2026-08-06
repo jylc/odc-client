@@ -223,6 +223,19 @@ export function getJavaPath() {
   };
 }
 
+/**
+ * 获取 H2 数据库迁移所需的 jar 包路径。
+ * v1 为旧版本（1.4.200），v2 为新版本（2.3.232），分别用于导出旧库与导入新库。
+ */
+export function getH2JarPath() {
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  const baseDir = isDevelopment ? process.cwd() : process.resourcesPath || '';
+  return {
+    v1: path.join(baseDir, 'libraries/script/h2-v1.jar'),
+    v2: path.join(baseDir, 'libraries/script/h2-v2.jar'),
+  };
+}
+
 export function getSettingPath() {
   const isDevelopment = process.env.NODE_ENV === 'development';
   let basePath = isDevelopment

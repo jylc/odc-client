@@ -2806,6 +2806,7 @@
   "odc.component.ResourceSelector.IncludingDataSourcesProjectsRoles": "包括資料來源、專案、角色、使用者的系統管理權限（建立/管理/編輯/查看）",
   "odc.NewSSODrawerButton.SSOForm.OauthInformation": "OAUTH 資訊",
   "odc.SessionContextWrap.SessionSelect.SelectADatabase": "請選擇資料庫",
+  "odc.component.SessionSelect.collapseObjectTree": "顯示/隱藏物件樹",
   "odc.Datasource.NewDatasourceDrawer.NewButton.CreateADataSource": "建立資料來源",
   "odc.Database.AddDataBaseButton.SelectAnUnassignedDatabase": "請選擇未分配專案的資料庫",
   "odc.Datasource.Info.CharacterEncoding": "字元編碼",
