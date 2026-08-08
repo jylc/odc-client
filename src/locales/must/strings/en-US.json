@@ -3315,6 +3315,8 @@
   "odc.component.VersionModal.config.CollaborationEfficiency": "Synergy efficiency",
   "odc.Record.RecordPage.interface.CreateADataSource": "Create a data source",
   "odc.ResourceTree.Datasource.DeletedSuccessfully": "Deleted successfully",
+  "odc.ResourceTree.Datasource.FailedToLoad": "Failed to load datasource",
+  "odc.component.SessionSelect.collapseObjectTree": "Show/Hide object tree",
   "odc.DataMockerTask.DetailContent.Description": "Description",
   "odc.component.VersionModal.config.AtTheSameTimeIn": "At the same time, in order to improve your use experience, the following functional designs have been made: support dragging objects to generate SQL statements, support class EXCEL\nThe result set editing interaction of, supports syntax highlighting and SQL when editing SQL.\nAutomatic completion, support for the definition and reference of code snippets, and support for rapid generation of test data.",
   "odc.component.VersionModal.config.AtTheSameTimeOdc": "At the same time, ODC also provides the operation audit and SQL audit capabilities. You are in ODC.\nAll function operations on the ODC are synchronized to the operation record center, and all SQL requests initiated on the ODC are also recorded.",

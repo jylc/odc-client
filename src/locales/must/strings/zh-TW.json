@@ -3315,6 +3315,8 @@
   "odc.component.VersionModal.config.CollaborationEfficiency": "協同效率",
   "odc.Record.RecordPage.interface.CreateADataSource": "創建數據源",
   "odc.ResourceTree.Datasource.DeletedSuccessfully": "刪除成功",
+  "odc.ResourceTree.Datasource.FailedToLoad": "加載數據源失敗",
+  "odc.component.SessionSelect.collapseObjectTree": "顯示/隱藏對象樹",
   "odc.DataMockerTask.DetailContent.Description": "描述",
   "odc.component.VersionModal.config.AtTheSameTimeIn": "同時為了提高您的使用體驗,也做了如下功能設計:支持拖拽對象生成 SQL 語句、支持類 EXCEL\n的結果集編輯交互、在編輯 SQL 時支持語法高亮和 SQL\n自動補全、支持代碼片段的定義與引用以及支持快速生成測試數據等。",
   "odc.component.VersionModal.config.AtTheSameTimeOdc": "同時 ODC 還提供了操作審計和 SQL 審計的能力。 您在 ODC\n上所有的功能操作都會被同步到操作記錄中心,此外在 ODC 上發起的所有 SQL 請求也會被記錄。",

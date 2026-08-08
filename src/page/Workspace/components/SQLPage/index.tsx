@@ -23,6 +23,7 @@ import ExecuteSQLModal from '@/component/ExecuteSQLModal';
 import { IEditor } from '@/component/MonacoEditor';
 import SaveSQLModal from '@/component/SaveSQLModal';
 import ScriptPage from '@/component/ScriptPage';
+import ObjectTreePanel from '@/component/ScriptPage/ObjectTreePanel';
 import SQLConfigContext from '@/component/SQLConfig/SQLConfigContext';
 import { ISQLLintReuslt } from '@/component/SQLLintResult/type';
 import { getPageTitleText } from '@/component/WindowManager/helper';
@@ -1135,6 +1136,7 @@ export class SQLPage extends Component<IProps, ISQLPageState> {
       <SQLConfigContext.Provider value={{ session, pageKey }}>
         <ScriptPage
           session={session}
+          objectTreePanel={<ObjectTreePanel session={session} />}
           ctx={this}
           language={config?.sql?.language}
           toolbar={{

@@ -3373,6 +3373,8 @@
   "odc.component.VersionModal.config.OdcProvidesDatabaseObjectManagement": "ODC 提供了数据库对象管理、数据导入导出、SQL 编辑与执行、PL\n          编译与调试、数据生成、执行分析、数据库运维等工具能力。",
   "odc.Env.components.EditRuleDrawer.AllowExecution": "允许执行",
   "odc.ResourceTree.Datasource.DeletedSuccessfully": "删除成功",
+  "odc.ResourceTree.Datasource.FailedToLoad": "加载数据源失败",
+  "odc.component.SessionSelect.collapseObjectTree": "显示/隐藏对象树",
   "odc.DataArchiveTask.CreateModal.VariableConfig.DeleteAVariable": "删除变量",
   "odc.component.DataTransferModal.Description": "描述",
   "odc.component.VersionModal.config.CollaborationEfficiency": "协同效率",
