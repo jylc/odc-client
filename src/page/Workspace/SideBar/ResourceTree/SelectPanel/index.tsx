@@ -16,7 +16,7 @@
 
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import SideTabs, { ITab } from '../../components/SideTabs';
-import ResourceTreeContext from '@/page/Workspace/context/ResourceTreeContext';
+import ResourceTreeContext, { ResourceTreeTab } from '@/page/Workspace/context/ResourceTreeContext';
 import { formatMessage } from '@/util/intl';
 import DataSourceTree from './Datasource';
 import ProjectTree from './Project';
@@ -39,8 +39,10 @@ enum PanelType {
 }
 const SelectPanel: React.FC<IProps> = function ({ userStore, onClose }) {
   const resourcetreeContext = useContext(ResourceTreeContext);
-  const { selectProjectId, selectDatasourceId } = resourcetreeContext;
-  const [selectPanel, setSelectPanel] = useState<PanelType>(PanelType.DataSource);
+  const { selectProjectId, selectDatasourceId, selectTabKey } = resourcetreeContext;
+  const [selectPanel, setSelectPanel] = useState<PanelType>(
+    selectTabKey === ResourceTreeTab.project ? PanelType.Project : PanelType.DataSource,
+  );
   const [envs, setEnvs] = useState<number[]>([]);
   const [connectTypes, setConnectTypes] = useState<ConnectType[]>([]);
   const sourceRef = useRef<any>();
@@ -125,12 +127,17 @@ const SelectPanel: React.FC<IProps> = function ({ userStore, onClose }) {
     ],
   };
   useEffect(() => {
-    if (selectProjectId) {
+    /**
+     * 已选中项目时展示"项目"页签；从项目页"登录数据库"进入时（selectTabKey 为 project）
+     * 也默认展示"项目"页签，以便 Project 子组件消费 autoEnterProjectId 自动进入项目内
+     * 数据源视图。其余情况回到"数据源"页签。
+     */
+    if (selectProjectId || selectTabKey === ResourceTreeTab.project) {
       setSelectPanel(PanelType.Project);
     } else {
       setSelectPanel(PanelType.DataSource);
     }
-  }, [selectDatasourceId, selectProjectId]);
+  }, [selectDatasourceId, selectProjectId, selectTabKey]);
   const isSelected = selectDatasourceId || selectProjectId;
   return (
     <>

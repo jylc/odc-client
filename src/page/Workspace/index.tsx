@@ -75,12 +75,22 @@ const Workspace: React.FC<WorkspaceProps> = (props: WorkspaceProps) => {
     const databaseId = toInteger(params.get('databaseId'));
     const datasourceId = toInteger(params.get('datasourceId'));
     if (projectId) {
+      /**
+       * 从项目页"登录数据库"进入时，侧边栏应停留在 SelectPanel 的项目内数据源视图
+       * （带返回箭头），与直接访问 SQL 控制台后手动进入项目的表现一致。
+       *
+       * 设置 autoEnterProjectId（由 SelectPanel 的 Project 子组件消费后清空）让它保持
+       * SelectPanel 打开；设置 currentDatabaseId 让 Project 树自动定位/高亮目标数据库。
+       * Container 的 effect 在 autoEnterProjectId 存在时不会因 currentDatabaseId 关闭面板。
+       */
       resourceTreeContext?.setSelectTabKey(ResourceTreeTab.project);
-      resourceTreeContext?.setSelectProjectId(projectId);
+      resourceTreeContext?.setAutoEnterProjectId?.(projectId);
+      databaseId && resourceTreeContext?.setCurrentDatabaseId(databaseId);
       databaseId && openNewSQLPage(databaseId, 'project');
     } else if (datasourceId) {
       resourceTreeContext?.setSelectTabKey(ResourceTreeTab.datasource);
       resourceTreeContext?.setSelectDatasourceId(datasourceId);
+      databaseId && resourceTreeContext?.setCurrentDatabaseId(databaseId);
       databaseId && openNewSQLPage(databaseId, 'datasource');
     } else {
       return;
