@@ -25,6 +25,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } 
 import { loadNode } from './helper';
 import styles from './index.less';
 import { DataBaseTreeData } from './Nodes/database';
+import StatusIcon from '@/component/StatusIcon/DataSourceIcon';
 import TreeNodeMenu from './TreeNodeMenu';
 import { ResourceNodeType, TreeDataNode } from './type';
 import tracert from '@/util/tracert';
@@ -33,6 +34,7 @@ import Icon, { SwapOutlined } from '@ant-design/icons';
 import Reload from '@/component/Button/Reload';
 import DatasourceFilter from './DatasourceFilter';
 import { ConnectType, DbObjectType } from '@/d.ts';
+import { IDatasource } from '@/d.ts/datasource';
 import useTreeState from './useTreeState';
 import DatabaseSearch from './DatabaseSearch';
 import { useParams } from '@umijs/max';
@@ -55,6 +57,11 @@ interface IProps {
   enableFilter?: boolean;
   stateId?: string;
   onTitleClick?: () => void;
+  /**
+   * 展平数据库层级：把库的子节点（表/视图/函数/存储过程等对象类型根）直接作为顶层节点，
+   * 不再显示库本身。用于 SQL 编辑器内嵌的对象树（只关心当前库的对象，无需库这一层）。
+   */
+  flattenDatabase?: boolean;
 }
 
 const ResourceTree: React.FC<IProps> = function ({
@@ -67,6 +74,7 @@ const ResourceTree: React.FC<IProps> = function ({
   onTitleClick,
   reloadDatabase,
   pollingDatabase,
+  flattenDatabase,
   showTip = false,
   enableFilter,
   stateId,
@@ -101,21 +109,9 @@ const ResourceTree: React.FC<IProps> = function ({
     };
   }, []);
 
-  useEffect(() => {
-    modalStore.changeDatabaseSearchModalData(true, setDatabaseSelected);
-  }, [databases]);
-
-  const setDatabaseSelected = (key) => {
-    setExpandedKeys([key]);
-    treeContext.setCurrentDatabaseId(key);
-    // 滚动到指定高度
-    const findIndex = databases.findIndex((i) => i.id === key);
-    treeRef?.current?.scrollTo({ top: findIndex * 28 });
-  };
-
   const treeData: TreeDataNode[] = (() => {
-    const root = databases
-      ?.filter((db) => {
+    const filteredDatabases =
+      databases?.filter((db) => {
         if (
           searchValue?.type === DbObjectType.database &&
           !db.name.toLowerCase()?.includes(searchValue?.value?.toLowerCase())
@@ -130,20 +126,111 @@ const ResourceTree: React.FC<IProps> = function ({
           !(envs?.length && !envs.includes(db.environment?.id)) &&
           !(connectTypes?.length && !connectTypes.includes(db.dataSource?.type))
         );
-      })
-      ?.map((database) => {
+      }) || [];
+
+    const buildDatabaseNodes = (list: IDatabase[]) =>
+      list.map((database) => {
         const dbId = database.id;
         const dbSessionId = sessionIds[dbId];
         const dbSession = sessionManagerStore.sessionMap.get(dbSessionId);
         return DataBaseTreeData(dbSession, database, database?.id, true, searchValue);
       });
-    return root || [];
+
+    if (flattenDatabase && filteredDatabases.length) {
+      /**
+       * 展平数据库层级：把当前库的对象类型根（表/视图/函数/存储过程…）直接作为顶层节点，
+       * 不显示库本身。用于 SQL 编辑器内嵌对象树。
+       */
+      const databaseNodes = buildDatabaseNodes(filteredDatabases);
+      const children = [].concat(...databaseNodes.map((node) => node.children || []));
+      return children;
+    }
+
+    if (databaseFrom === 'project') {
+      /**
+       * Project mode groups databases by datasource so the tree shows
+       * 项目 → 数据源 → 库, matching the SelectPanel's project tree.
+       */
+      const groups = new Map<number, { dataSource: IDatasource; databases: IDatabase[] }>();
+      filteredDatabases.forEach((database) => {
+        const dataSource = database.dataSource;
+        if (!dataSource) {
+          return;
+        }
+        const group = groups.get(dataSource.id) || { dataSource, databases: [] };
+        group.databases.push(database);
+        groups.set(dataSource.id, group);
+      });
+      return [...groups.values()].map(({ dataSource, databases }) => ({
+        title: dataSource.name,
+        key: `ds-${dataSource.id}`,
+        type: ResourceNodeType.Datasource,
+        data: dataSource,
+        icon: <StatusIcon item={dataSource} />,
+        isLeaf: false,
+        children: buildDatabaseNodes(databases),
+      }));
+    }
+
+    return buildDatabaseNodes(filteredDatabases);
   })();
+
+  const setDatabaseSelected = (key) => {
+    const group = treeData.find((node) => node.children?.some((child) => child.key === key));
+    setExpandedKeys(group ? [group.key, key] : [key]);
+    treeContext.setCurrentDatabaseId(key);
+    treeRef?.current?.scrollTo({ key });
+  };
+
+  useEffect(() => {
+    modalStore.changeDatabaseSearchModalData(true, setDatabaseSelected);
+  }, [databases]);
+
+  /**
+   * 当 currentDatabaseId 变化（如经"登录数据库"打开 SQL 页，或在搜索弹窗选中库）时，
+   * 在树中定位它：展开所属数据源分组并滚动到视图内，让侧边栏跟随打开的编辑器页。
+   */
+  const locatedDatabaseIdRef = useRef<number>(null);
+  useEffect(() => {
+    const databaseId = treeContext.currentDatabaseId;
+    if (!databaseId) {
+      locatedDatabaseIdRef.current = null;
+      return;
+    }
+    if (locatedDatabaseIdRef.current === databaseId) {
+      return;
+    }
+    const group = treeData.find((node) => node.children?.some((child) => child.key === databaseId));
+    const exists = group || treeData.some((node) => node.key === databaseId);
+    if (!exists) {
+      /**
+       * 数据库列表可能尚未加载完成；下次 treeData 变化时重试。
+       */
+      return;
+    }
+    locatedDatabaseIdRef.current = databaseId;
+    if (group) {
+      const keys = [...expandedKeys];
+      if (!keys.includes(group.key)) {
+        keys.push(group.key);
+      }
+      setExpandedKeys(keys);
+    }
+    setTimeout(() => {
+      treeRef?.current?.scrollTo({ key: databaseId });
+    }, 0);
+  }, [treeContext.currentDatabaseId, treeData]);
 
   const loadData = useCallback(
     async (treeNode: EventDataNode<any> & TreeDataNode) => {
       const { type, data } = treeNode;
       switch (type) {
+        case ResourceNodeType.Datasource: {
+          /**
+           * 项目模式下数据源节点由已拉取的数据库列表分组而来，无需懒加载。
+           */
+          break;
+        }
         case ResourceNodeType.Database: {
           const dbId = (data as IDatabase).id;
           const dbSession =
@@ -187,18 +274,19 @@ const ResourceTree: React.FC<IProps> = function ({
 
   return (
     <div className={styles.resourceTree}>
-      <div className={styles.title}>
-        {tabKey ? (
-          <Space size={2} className={styles.label}>
-            {title}
-          </Space>
-        ) : (
-          <Space size={4} onClick={() => onTitleClick?.()} className={styles.label}>
-            {title}
-            <Icon style={{ verticalAlign: 'middle' }} component={SwapOutlined} />
-          </Space>
-        )}
-        <span className={styles.titleAction}>
+      {flattenDatabase ? null : (
+        <div className={styles.title}>
+          {tabKey ? (
+            <Space size={2} className={styles.label}>
+              {title}
+            </Space>
+          ) : (
+            <Space size={4} onClick={() => onTitleClick?.()} className={styles.label}>
+              {title}
+              <Icon style={{ verticalAlign: 'middle' }} component={SwapOutlined} />
+            </Space>
+          )}
+          <span className={styles.titleAction}>
           <Space size={8} style={{ lineHeight: 1.5 }}>
             {enableFilter ? (
               <DatasourceFilter
@@ -239,7 +327,8 @@ const ResourceTree: React.FC<IProps> = function ({
             />
           </Space>
         </span>
-      </div>
+        </div>
+      )}
       <div className={styles.search}>
         <DatabaseSearch
           onChange={(type, value) => {

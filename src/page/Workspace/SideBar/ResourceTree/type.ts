@@ -80,6 +80,10 @@ export enum ResourceNodeType {
   PackageHeadProcedure,
   PackageBodyFunction,
   PackageBodyProcedure,
+  /**
+   * 数据源分组节点（项目模式下按数据源分组的树节点）。
+   */
+  Datasource,
 }
 
 interface ExtraData {
