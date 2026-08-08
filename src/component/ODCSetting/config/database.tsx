@@ -153,6 +153,40 @@ const databaseSettings: IODCSetting[] = [
     },
   },
   {
+    label: formatMessage({
+      id: 'src.component.ODCSetting.config.querySqlResultDisplayMode',
+      defaultMessage: '结果集展示',
+    }), //'结果集展示'
+    key: 'odc.sqlexecute.querySqlResultDisplayMode',
+    group: databaseGroup,
+    secondGroup: databaseResultsetGroup,
+    storeType: 'server',
+    render: (value, onChange) => {
+      return (
+        <RadioItem
+          options={[
+            {
+              label: formatMessage({
+                id: 'src.component.ODCSetting.config.querySqlResultDisplayMode.overwrite',
+                defaultMessage: '覆盖',
+              }), //'覆盖'
+              value: 'OVERWRITE',
+            },
+            {
+              label: formatMessage({
+                id: 'src.component.ODCSetting.config.querySqlResultDisplayMode.append',
+                defaultMessage: '追加',
+              }), //'追加'
+              value: 'APPEND',
+            },
+          ]}
+          value={value}
+          onChange={onChange}
+        />
+      );
+    },
+  },
+  {
     label: formatMessage({ id: 'src.component.ODCSetting.config.B86084FC' }), //'查询条数限制'
     key: 'odc.sqlexecute.default.queryLimit',
     group: databaseGroup,

@@ -233,16 +233,29 @@ export class SQLStore {
 
       if (resultSet) {
         const lockedResultSets = resultSet.filter((r) => r.locked); // @ts-ignore
-        resultSet.forEach((r) => {
-          if (!r.locked) {
-            /**
-             * chrome会缓存卸载后的含有react组件的dom，导致数据无法释放，这边手动清空，防止内存爆满
-             */
-            r.rows.splice(0);
-          }
-        });
+        /**
+         * 结果集展示模式：
+         * - OVERWRITE（默认）：清掉未锁定结果集，用本次结果替换。
+         * - APPEND：保留未锁定结果集（排除日志页签），本次结果追加在后。
+         */
+        const isAppend =
+          setting.configurations?.['odc.sqlexecute.querySqlResultDisplayMode'] === 'APPEND';
+        const unlockedResultSets = isAppend
+          ? resultSet.filter((r) => !r.locked && r.type !== 'LOG')
+          : [];
+        if (!isAppend) {
+          resultSet.forEach((r) => {
+            if (!r.locked) {
+              /**
+               * chrome会缓存卸载后的含有react组件的dom，导致数据无法释放，这边手动清空，防止内存爆满
+               */
+              r.rows.splice(0);
+            }
+          });
+        }
         this.resultSets.set(pageKey, [
           ...lockedResultSets,
+          ...unlockedResultSets,
           this.getLogTab(record.executeResult),
           ...generateResultSetColumns(record.executeResult, session?.connection?.dialectType),
         ]);
@@ -570,8 +583,15 @@ export class SQLStore {
 
   public getFirstUnlockedResultKey(pageKey: string) {
     const resultSet = this.resultSets.get(pageKey);
+    const unlockedResults = resultSet?.filter((r) => !r.locked && r.type !== 'LOG') || [];
+    /**
+     * APPEND 模式：返回最后一个（最新）结果集，保证执行后定位到最新结果；
+     * OVERWRITE 模式（默认）：只有一个未锁定结果集，返回它即可。
+     */
+    const isAppend =
+      setting.configurations?.['odc.sqlexecute.querySqlResultDisplayMode'] === 'APPEND';
     return (
-      resultSet?.find((r) => !r.locked && r.type !== 'LOG')?.uniqKey ||
+      (isAppend ? unlockedResults[unlockedResults.length - 1] : unlockedResults[0])?.uniqKey ||
       resultSet?.find((r) => !r.locked && r.type === 'LOG')?.uniqKey
     );
   }
