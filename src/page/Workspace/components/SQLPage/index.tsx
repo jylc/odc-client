@@ -395,6 +395,11 @@ export class SQLPage extends Component<IProps, ISQLPageState> {
         this.setState({
           resultSetTabActiveKey: sqlLintTabKey,
         });
+      } else {
+        const firstResultKey = sqlStore.getFirstUnlockedResultKey(pageKey);
+        this.setState({
+          resultSetTabActiveKey: firstResultKey ? firstResultKey : recordsTabKey,
+        });
       }
       this.setState({
         lintResultSet: result?.lintResultSet,
@@ -465,6 +470,11 @@ export class SQLPage extends Component<IProps, ISQLPageState> {
       } else if (results?.status !== EStatus.SUBMIT) {
         this.setState({
           resultSetTabActiveKey: sqlLintTabKey,
+        });
+      } else {
+        const firstResultKey = sqlStore.getFirstUnlockedResultKey(pageKey);
+        this.setState({
+          resultSetTabActiveKey: firstResultKey ? firstResultKey : recordsTabKey,
         });
       }
       this.setState({
@@ -1295,10 +1305,19 @@ export class SQLPage extends Component<IProps, ISQLPageState> {
      * 装填一下额外数据,详细的列名
      */
 
-    const firstResultKey = sqlStore.getFirstUnlockedResultKey(pageKey);
-    this.setState({
-      resultSetTabActiveKey: firstResultKey ? firstResultKey : recordsTabKey,
-    });
+    /**
+     * 定位结果集页签：
+     * - 无 lint 结果的普通执行：在此统一定位到最新结果页签（一次性，不会闪）。
+     * - 有 lint 结果：交由调用方（handleExecuteSQL / handleExecuteSelectedSQL）
+     *   根据"是否有失败语句 / 是否提交"决定切到结果页签还是 lint 页签，
+     *   避免这里先切一次再被调用方覆盖，造成页签"闪一下"。
+     */
+    if (!results?.hasLintResults) {
+      const firstResultKey = sqlStore.getFirstUnlockedResultKey(pageKey);
+      this.setState({
+        resultSetTabActiveKey: firstResultKey ? firstResultKey : recordsTabKey,
+      });
+    }
 
     // TODO: 刷新左侧资源树
 
