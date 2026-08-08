@@ -2,7 +2,7 @@ import getVersion from './version';
 import defineConfig from './defineConfig';
 import theme from './theme';
 import routes from './routes';
-import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin' 
+import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin'
 import path from 'path';
 
 const version = getVersion();
@@ -48,17 +48,17 @@ const config = {
   proxy: {
     // 本地开发或者对内 Site 应用的开发环境的代理配置
     '/api/v1/webSocket/obclient': {
-      target: 'http://dev.odc-local.net:7001/proxy/96',
+      target: 'http://localhost:8990/',
       ws: true,
     },
     '/api/': {
-      target: 'http://dev.odc-local.net:7001/proxy/96',
+      target: 'http://localhost:8990/',
     },
     '/oauth2/': {
-      target: 'http://dev.odc-local.net:7001/proxy/96',
+      target: 'http://localhost:8990/',
     },
     '/login/': {
-      target: 'http://dev.odc-local.net:7001/proxy/96',
+      target: 'http://localhost:8990/',
     }
   },
 
@@ -69,6 +69,7 @@ const config = {
   title: false,
   favicons: [publicPath + 'img/favicon.png'],
   // ctoken: false,
+  clickToComponent: {},
 
   externals: {
     electron: 'commonjs electron',
@@ -90,6 +91,12 @@ const config = {
   },
 
   outputPath: './dist/renderer',
+  copy: [
+    {
+      from: path.join(process.cwd(), "node_modules/@oceanbase-odc/monaco-plugin-ob/worker-dist"),
+      to: "dist/renderer/workers/" + MONACO_VERSION
+    }
+  ],
 
   define,
   routes: routes,
