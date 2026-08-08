@@ -94,7 +94,7 @@ const config = {
   copy: [
     {
       from: path.join(process.cwd(), "node_modules/@oceanbase-odc/monaco-plugin-ob/worker-dist"),
-      to: "dist/renderer/workers/" + MONACO_VERSION
+      to: "dist/renderer/workers/" + (define.MONACO_VERSION || '1_6_5')
     }
   ],
 
