@@ -58,6 +58,11 @@ interface IProps {
   dialectTypes?: ConnectionMode[];
   showSessionSelect?: boolean;
   handleChangeSplitPane?: (size: number) => void;
+  /**
+   * 编辑器左侧的对象树面板（当前仅 SQLPage 注入）。传入后会用垂直 SplitPane
+   * 将其与编辑区拆分；未传入时保持原有单栏布局，向后兼容。
+   */
+  objectTreePanel?: React.ReactNode;
 }
 
 interface IPageState {
@@ -68,6 +73,19 @@ interface IPageState {
     line: number;
     column: number;
   };
+  /**
+   * 左侧对象树面板是否展开（默认折叠，onReady 后展开）。仅在 objectTreePanel 存在时生效。
+   */
+  showObjectTree: boolean;
+  /**
+   * 左侧对象树面板宽度（px），用于 SplitPane 的受控尺寸。
+   */
+  objectTreeWidth: number;
+  /**
+   * 是否正处于折叠/展开切换的动画过程中。仅在切换时为 true，给 pane1 加上宽度过渡；
+   * 拖拽分隔条时为 false，保证宽度立即跟随鼠标，不产生延迟。
+   */
+  treeAnimating: boolean;
 }
 
 @inject('settingStore')
@@ -77,7 +95,23 @@ export default class ScriptPage extends PureComponent<IProps> {
     templateInsertModalVisible: false,
     templateName: '',
     offset: null,
+    showObjectTree: false,
+    objectTreeWidth: 240,
+    treeAnimating: false,
     /// resultHeight: RESULT_HEIGHT
+  };
+
+  handleObjectTreeReady = () => {
+    this.setState({ treeAnimating: true }, () => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          this.setState({ showObjectTree: true }, () => {
+            window.dispatchEvent(new Event('resize'));
+          });
+        });
+      });
+    });
+    window.setTimeout(() => this.setState({ treeAnimating: false }), 240);
   };
 
   componentDidMount() {
@@ -103,8 +137,104 @@ export default class ScriptPage extends PureComponent<IProps> {
       sessionSelectReadonly,
       dialectTypes,
       showSessionSelect = true,
+      objectTreePanel,
     } = this.props;
+    const { showObjectTree, objectTreeWidth, treeAnimating } = this.state;
+    /**
+     * 给对象树面板注入 onReady 回调：数据就绪后由 ScriptPage 触发滑动展开。
+     * 通过 cloneElement 注入，避免要求各调用方（如 SQLPage）自行传递。
+     */
+    const objectTreePanelWithReady = objectTreePanel
+      ? React.cloneElement(objectTreePanel as React.ReactElement, {
+          onReady: this.handleObjectTreeReady,
+        })
+      : null;
     const isShowDebugStackBar = !!stackbar?.list?.length;
+    const hasObjectTreePane = !!objectTreePanel;
+    const sessionSelectHeight = showSessionSelect ? 32 : 0;
+    const debugStackHeight = isShowDebugStackBar ? 28 : 0;
+    /**
+     * 对象树可见时工具栏移入右侧 pane（在编辑器输入区上方），此时 editorHost 顶部只需越过
+     * SessionSelect 与调试栈栏；无对象树时保持原布局，工具栏在最顶部。
+     */
+    const editorHostTop = hasObjectTreePane
+      ? sessionSelectHeight + debugStackHeight
+      : EDITOR_TOOLBAR_HEIGHT + debugStackHeight + sessionSelectHeight;
+    const editorHostBottom = statusBar && statusBar.status ? 32 : 0;
+    /**
+     * 编辑器输入区（DropWrapper 包裹 MonacoEditor + Others）。在对象树可见时它被放进右侧
+     * pane 的 .editorInputArea；否则直接定位在 Content 内。
+     */
+    const editorArea = (
+      <DropWrapper
+        style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+        }}
+        onHover={(item, monitor) => {
+          ctx.editor?.focus();
+          const clientOffset = monitor.getClientOffset();
+          editorUtils.updateEditorCursorPositionByClientPosition(ctx.editor, {
+            clientX: clientOffset.x,
+            clientY: clientOffset.y,
+          });
+        }}
+        onDrop={async (item, monitor) => {
+          const snippetBody = snippetStore.snippetDragging?.body;
+          if (!snippetBody) {
+            return;
+          }
+          const snippetTemplate = getUnWrapedSnippetBody(snippetBody);
+          if (snippetTemplate) {
+            editorUtils.insertSnippetTemplate(ctx.editor, snippetTemplate);
+          } else if (
+            [DbObjectType.table, DbObjectType.view].includes(
+              snippetStore.snippetDragging?.objType,
+            )
+          ) {
+            const position = (ctx.editor as IEditor)?.getPosition();
+            if (!position) {
+              return;
+            }
+            if (snippetStore.snippetDragging.databaseId !== session.database.databaseId) {
+              message.warn(
+                formatMessage({
+                  id: 'src.component.ScriptPage.D0B6C37B' /*'该对象不属于当前数据库'*/,
+                }),
+              );
+              return;
+            }
+            const CLOSE_INSERT_PROMPT = localStorage.getItem(CLOSE_INSERT_PROMPT_KEY);
+            if (CLOSE_INSERT_PROMPT === 'true') {
+              const name = snippetBody;
+              const type = snippetStore.snippetDragging?.objType;
+              const value =
+                settingStore.configurations['odc.sqlexecute.default.objectDraggingOption'];
+              const insertText = await getCopyText(name, type, value, true, session.sessionId);
+              const editor = ctx.editor as IEditor;
+              editor.focus();
+              editorUtils.insertSnippetTemplate(ctx.editor, insertText);
+            } else {
+              this.setState({
+                templateInsertModalVisible: true,
+                templateName: snippetBody,
+                offset: {
+                  line: position.lineNumber,
+                  column: position.column,
+                },
+              });
+            }
+          } else {
+            editorUtils.insertTextToCurrectPosition(ctx.editor, snippetBody);
+          }
+        }}
+      >
+        <MonacoEditor {...editor} language={language} sessionStore={this.props.session} />
+      </DropWrapper>
+    );
     return (
       <Layout
         style={{
@@ -114,9 +244,19 @@ export default class ScriptPage extends PureComponent<IProps> {
         }}
       >
         <Content style={{ position: 'relative' }}>
-          {toolbar && <EditorToolBar {...toolbar} ctx={ctx} />}
           {showSessionSelect && (
-            <SessionSelect dialectTypes={dialectTypes} readonly={sessionSelectReadonly} />
+            <SessionSelect
+              dialectTypes={dialectTypes}
+              readonly={sessionSelectReadonly}
+              collapsible={!!objectTreePanel}
+              collapsed={!!objectTreePanel && !showObjectTree}
+              onToggleCollapse={() => {
+                this.setState({ showObjectTree: !showObjectTree, treeAnimating: true }, () => {
+                  window.dispatchEvent(new Event('resize'));
+                });
+                window.setTimeout(() => this.setState({ treeAnimating: false }), 220);
+              }}
+            />
           )}
 
           {isShowDebugStackBar ? (
@@ -136,78 +276,60 @@ export default class ScriptPage extends PureComponent<IProps> {
               })}
             </div>
           ) : null}
-          <DropWrapper
-            style={{
-              position: 'absolute',
-              top:
-                EDITOR_TOOLBAR_HEIGHT +
-                (isShowDebugStackBar ? 28 : 0) +
-                (showSessionSelect ? 32 : 0),
-              bottom: statusBar && statusBar.status ? 32 : 0,
-              left: 0,
-              right: 0,
-            }}
-            onHover={(item, monitor) => {
-              ctx.editor?.focus();
-              const clientOffset = monitor.getClientOffset();
-              editorUtils.updateEditorCursorPositionByClientPosition(ctx.editor, {
-                clientX: clientOffset.x,
-                clientY: clientOffset.y,
-              });
-            }}
-            onDrop={async (item, monitor) => {
-              const snippetBody = snippetStore.snippetDragging?.body;
-              if (!snippetBody) {
-                return;
-              }
-              const snippetTemplate = getUnWrapedSnippetBody(snippetBody);
-              if (snippetTemplate) {
-                editorUtils.insertSnippetTemplate(ctx.editor, snippetTemplate);
-              } else if (
-                [DbObjectType.table, DbObjectType.view].includes(
-                  snippetStore.snippetDragging?.objType,
-                )
-              ) {
-                const position = (ctx.editor as IEditor)?.getPosition();
-                if (!position) {
-                  return;
-                }
-                if (snippetStore.snippetDragging.databaseId !== session.database.databaseId) {
-                  message.warn(
-                    formatMessage({
-                      id: 'src.component.ScriptPage.D0B6C37B' /*'该对象不属于当前数据库'*/,
-                    }),
-                  );
-                  return;
-                }
-                const CLOSE_INSERT_PROMPT = localStorage.getItem(CLOSE_INSERT_PROMPT_KEY);
-                if (CLOSE_INSERT_PROMPT === 'true') {
-                  const name = snippetBody;
-                  const type = snippetStore.snippetDragging?.objType;
-                  const value =
-                    settingStore.configurations['odc.sqlexecute.default.objectDraggingOption'];
-                  const insertText = await getCopyText(name, type, value, true, session.sessionId);
-                  const editor = ctx.editor as IEditor;
-                  editor.focus();
-                  editorUtils.insertSnippetTemplate(ctx.editor, insertText);
-                } else {
-                  this.setState({
-                    templateInsertModalVisible: true,
-                    templateName: snippetBody,
-                    offset: {
-                      line: position.lineNumber,
-                      column: position.column,
-                    },
-                  });
-                }
-              } else {
-                editorUtils.insertTextToCurrectPosition(ctx.editor, snippetBody);
-              }
-            }}
-          >
-            <MonacoEditor {...editor} language={language} sessionStore={this.props.session} />
-          </DropWrapper>
-          {this.props.Others}
+          {objectTreePanel ? (
+            <div
+              className={styles.editorHost}
+              style={{ top: editorHostTop, bottom: editorHostBottom, left: 0, right: 0 }}
+            >
+              <SplitPane
+                split="vertical"
+                minSize={showObjectTree ? 160 : 0}
+                maxSize={520}
+                size={showObjectTree ? objectTreeWidth : 0}
+                allowResize={showObjectTree}
+                onChange={(size) => {
+                  this.setState({ objectTreeWidth: size, treeAnimating: false });
+                  window.dispatchEvent(new Event('resize'));
+                }}
+                pane1Style={{
+                  overflow: 'hidden',
+                  transition: treeAnimating ? 'width 0.2s ease' : 'none',
+                }}
+                pane2Style={{ position: 'relative', overflow: 'hidden' }}
+                resizerStyle={{
+                  display: showObjectTree ? 'block' : 'none',
+                  width: '8px',
+                  cursor: 'col-resize',
+                  background:
+                    'linear-gradient(to right, transparent 0, transparent 3.5px, var(--neutral-grey7-color) 3.5px, var(--neutral-grey7-color) 4.5px, transparent 4.5px)',
+                  transition: 'background 0.15s ease',
+                }}
+              >
+                <div className={styles.objectTreePane}>{objectTreePanelWithReady}</div>
+                {/**
+                 * 右侧面板：工具栏在编辑器正上方，仅覆盖编辑器宽度（与截图一致）。
+                 */}
+                <div className={styles.editorRightPane}>
+                  {toolbar && <EditorToolBar {...toolbar} ctx={ctx} />}
+                  <div className={styles.editorInputArea}>
+                    {editorArea}
+                    {this.props.Others}
+                  </div>
+                </div>
+              </SplitPane>
+            </div>
+          ) : (
+            <>
+              {toolbar && <EditorToolBar {...toolbar} ctx={ctx} />}
+              <div
+                className={styles.editorHost}
+                style={{ top: editorHostTop, bottom: editorHostBottom, left: 0, right: 0 }}
+              >
+                {editorArea}
+                {this.props.Others}
+              </div>
+            </>
+          )}
         </Content>
         {editor?.enableSnippet && ctx.state.showGrammerHelpSider ? (
           <GrammerHelpSider
