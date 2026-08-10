@@ -37,7 +37,7 @@ import SessionDropdown from './SessionDropdown';
 import RiskLevelLabel from '@/component/RiskLevelLabel';
 import { EnvColorMap } from '@/constant';
 import login from '@/store/login';
-import ResourceTreeContext from '@/page/Workspace/context/ResourceTreeContext';
+import ResourceTreeContext, { ResourceTreeTab } from '@/page/Workspace/context/ResourceTreeContext';
 import ActivityBarContext from '@/page/Workspace/context/ActivityBarContext';
 import { ActivityBarItemType } from '@/page/Workspace/ActivityBar/type';
 import { IDataSourceModeConfig } from '@/common/datasource/interface';
@@ -75,8 +75,27 @@ export default function SessionSelect({
   function focusDataBase(e: React.MouseEvent) {
     const datasourceId = context?.session?.odcDatabase?.dataSource?.id;
     const databaseId = context?.session?.odcDatabase?.id;
+    const projectId = context?.session?.odcDatabase?.project?.id;
+    const fromDataSource = context.datasourceMode;
     activityContext.setActiveKey(ActivityBarItemType.Database);
-    resourceTreeContext.setSelectDatasourceId(datasourceId);
+    /**
+     * 项目模式（非独立数据源模式）且数据库归属某个项目时，在"项目"页签的项目内数据源
+     * 视图中定位数据库；否则在"数据源"页签的独立数据源目录下定位。
+     * autoEnterProjectId 作为一次性信号通知 SelectPanel 的 Project 组件进入该项目并保持
+     * SelectPanel 打开，由其内部根据 currentDatabaseId 定位数据库。
+     */
+    if (!fromDataSource && projectId) {
+      resourceTreeContext.setSelectTabKey?.(ResourceTreeTab.project);
+      /**
+       * 清掉残留的数据源/项目选择，确保 Container 重新打开 SelectPanel（autoEnterProjectId
+       * 保持其打开），避免之前进入过数据源目录导致面板被关闭。
+       */
+      resourceTreeContext.setSelectDatasourceId?.(null);
+      resourceTreeContext.setSelectProjectId?.(null);
+      resourceTreeContext.setAutoEnterProjectId?.(projectId);
+    } else {
+      resourceTreeContext.setSelectDatasourceId(datasourceId);
+    }
     resourceTreeContext.setCurrentDatabaseId(databaseId);
     e.stopPropagation();
     e.preventDefault();
