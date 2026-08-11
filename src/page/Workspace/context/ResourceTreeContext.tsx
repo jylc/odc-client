@@ -36,6 +36,13 @@ interface IResourceTreeContext {
   reloadProjectList?: () => void;
   currentDatabaseId?: number;
   setCurrentDatabaseId?: (v: number) => void;
+  /**
+   * 每次点击定位按钮时自增的请求序号。即使定位同一个库（currentDatabaseId 不变），
+   * 该序号也会变化，从而驱动定位 effect 重新执行，实现"再次点击定位"时重新展开数据源
+   * 并滚动到目标库。
+   */
+  locateRequestId?: number;
+  setLocateRequestId?: (v: number) => void;
   databaseList: IDatabase[];
   reloadDatabaseList?: () => void;
   pollingDatabase?: () => void;

@@ -198,17 +198,14 @@ const ResourceTree: React.FC<IProps> = function ({
   }, [databases]);
 
   /**
-   * 当 currentDatabaseId 变化（如经"登录数据库"打开 SQL 页，或在搜索弹窗选中库）时，
-   * 在树中定位它：展开所属数据源分组并滚动到视图内，让侧边栏跟随打开的编辑器页。
+   * 当 currentDatabaseId 变化（如经"登录数据库"打开 SQL 页，或在搜索弹窗选中库）或再次
+   * 点击定位（locateRequestId 自增）时，在树中定位它：展开所属数据源分组并滚动到视图内。
+   * 该 effect 是幂等的——每次运行都确保目标分组已展开并滚动，不再用永久 ref 阻断，这样
+   * "展开后收起再点定位"也能重新展开。
    */
-  const locatedDatabaseIdRef = useRef<number>(null);
   useEffect(() => {
     const databaseId = treeContext.currentDatabaseId;
     if (!databaseId) {
-      locatedDatabaseIdRef.current = null;
-      return;
-    }
-    if (locatedDatabaseIdRef.current === databaseId) {
       return;
     }
     const group = treeData.find((node) => node.children?.some((child) => child.key === databaseId));
@@ -219,13 +216,12 @@ const ResourceTree: React.FC<IProps> = function ({
        */
       return;
     }
-    locatedDatabaseIdRef.current = databaseId;
     if (group) {
       const keys = [...expandedKeys];
       if (!keys.includes(group.key)) {
         keys.push(group.key);
+        setExpandedKeys(keys);
       }
-      setExpandedKeys(keys);
     }
     setTimeout(() => {
       /**
@@ -239,7 +235,7 @@ const ResourceTree: React.FC<IProps> = function ({
         nodeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
     }, 0);
-  }, [treeContext.currentDatabaseId, treeData]);
+  }, [treeContext.currentDatabaseId, treeContext.locateRequestId, treeData]);
 
   const loadData = useCallback(
     async (treeNode: EventDataNode<any> & TreeDataNode) => {

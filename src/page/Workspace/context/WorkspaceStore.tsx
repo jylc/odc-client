@@ -37,6 +37,7 @@ export default function WorkspaceStore({ children }) {
   const { datasourceId } = useParams<{ datasourceId: string }>();
   const [selectTabKey, _setSelectTabKey] = useState<ResourceTreeTab>(ResourceTreeTab.datasource);
   const [currentDatabaseId, setCurrentDatabaseId] = useState<number>(null);
+  const [locateRequestId, setLocateRequestId] = useState<number>(0);
   function setSelectTabKey(v: ResourceTreeTab) {
     tracert.click(
       v === ResourceTreeTab.datasource
@@ -143,6 +144,8 @@ export default function WorkspaceStore({ children }) {
         reloadProjectList,
         currentDatabaseId,
         setCurrentDatabaseId,
+        locateRequestId,
+        setLocateRequestId,
         databaseList,
         reloadDatabaseList,
         pollingDatabase,

@@ -118,6 +118,7 @@ export default inject(
         setAutoEnterProjectId,
         currentDatabaseId,
         setCurrentDatabaseId,
+        locateRequestId,
       } = context;
 
       const [view, setView] = useState<View>('projectList');
@@ -158,12 +159,10 @@ export default inject(
       /**
        * 数据库自动定位用的 ref：treeRef 用于 scrollTo，treeContainerRef 指向树外层 DOM
        * 节点，用于在不依赖 rc-tree virtual 的情况下把目标 treenode 滚进可视区；
-       * locatedDatabaseIdRef 避免重复定位；locateLocatingRef 标记异步定位进行中，避免
-       * 重复发起全量库请求。
+       * locateLocatingRef 标记异步定位进行中，避免重复发起全量库请求。
        */
       const treeRef = useRef(null);
       const treeContainerRef = useRef<HTMLDivElement>(null);
-      const locatedDatabaseIdRef = useRef<number>(null);
       const locateLocatingRef = useRef<number>(null);
 
       useImperativeHandle(
@@ -240,9 +239,8 @@ export default inject(
         setSelectedProject(null);
         setDatasources([]);
         setTreeData([]);
-        locatedDatabaseIdRef.current = null;
         /**
-         * 返回项目列表时清掉一次性信号与定位标记，避免残留。
+         * 返回项目列表时清掉一次性信号，避免残留。
          */
         setAutoEnterProjectId?.(null);
         setCurrentDatabaseId?.(null);
@@ -267,15 +265,13 @@ export default inject(
       }, [autoEnterProjectId, projectList, view]);
 
       /**
-       * 自动定位数据库：从项目页"登录数据库"进入时，currentDatabaseId 被设置。
-       * 在数据源列表加载后，找到目标数据库所属的数据源节点（含该 databaseId 子节点），
-       * 展开该数据源（触发 loadData 加载数据库列表），待子节点出现后高亮并滚动定位。
+       * 自动定位数据库：currentDatabaseId 被设置（或再次点击定位时 locateRequestId 自增）。
+       * 找到目标数据库所属数据源节点，展开它，待子节点出现后高亮并滚动定位。
+       * 该 effect 是幂等的——每次运行都确保目标数据源已展开并滚动到目标库；不再用永久
+       * ref 阻断，这样"展开后收起再点定位"也能重新展开。
        */
       useEffect(() => {
         if (!currentDatabaseId || view !== 'datasourceList' || !treeData?.length) {
-          return;
-        }
-        if (locatedDatabaseIdRef.current === currentDatabaseId) {
           return;
         }
         if (locateLocatingRef.current === currentDatabaseId) {
@@ -296,14 +292,13 @@ export default inject(
         }
         if (datasourceNode) {
           /**
-           * 数据库子节点已加载：展开数据源（确保可见）并高亮目标数据库。
+           * 数据库子节点已加载：确保数据源展开（收起后再次定位时重新展开）并滚动到目标库。
            */
-          locatedDatabaseIdRef.current = currentDatabaseId;
           const keys = [...expandedKeys];
           if (!keys.includes(datasourceNode.key)) {
             keys.push(datasourceNode.key);
+            setExpandedKeys(keys);
           }
-          setExpandedKeys(keys);
           setTimeout(() => {
             /**
              * 本树未开启 virtual（未设 height/itemHeight），rc-tree 的 scrollTo 设置的是
@@ -401,7 +396,19 @@ export default inject(
             }
           })();
         }
-      }, [currentDatabaseId, treeData, view, expandedKeys, loadedKeys, selectedProject]);
+        /**
+         * locateRequestId 让"再次点击定位同一个库"也能重新触发本 effect（此时各同值 setter
+         * 都会短路，仅该序号变化）。
+         */
+      }, [
+        currentDatabaseId,
+        locateRequestId,
+        treeData,
+        view,
+        expandedKeys,
+        loadedKeys,
+        selectedProject,
+      ]);
 
       function deleteDataSource(name: string, id: number) {
         Modal.confirm({

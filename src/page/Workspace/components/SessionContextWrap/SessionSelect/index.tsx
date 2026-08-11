@@ -97,6 +97,14 @@ export default function SessionSelect({
       resourceTreeContext.setSelectDatasourceId(datasourceId);
     }
     resourceTreeContext.setCurrentDatabaseId(databaseId);
+    /**
+     * 每次点击定位都自增请求序号。即使定位同一个库（currentDatabaseId 不变、各 setter
+     * 因同值短路），该序号也会变化，驱动定位 effect 重新执行——这样"展开后收起再点定位"
+     * 才能重新展开目标数据源。
+     */
+    resourceTreeContext.setLocateRequestId?.(
+      (resourceTreeContext.locateRequestId || 0) + 1,
+    );
     e.stopPropagation();
     e.preventDefault();
   }
