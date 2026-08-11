@@ -339,12 +339,22 @@ export default inject(
            * /api/v2/database/databases 请求，N 个数据源就是 N 次扇出），而是用一次
            * listDatabases(projectId) 拉取整个项目的全部库，找到目标库所属数据源后只把
            * 该数据源的子节点填入并展开，把 N 次请求降为 1 次。
+           *
+           * 跨项目定位时（autoEnterProjectId 指向另一个项目），必须等 enterProject 把
+           * selectedProject 切换到目标项目后再拉取——否则会用旧项目的 id 拉取，目标库不在
+           * 其中，且 locateLocatingRef 会被错误地置位、阻塞后续重跑，表现为"要点两次定位"。
+           * 这里通过校验 selectedProject.id 与目标项目一致才继续，不一致则直接 return（不置
+           * locateLocatingRef），让 selectedProject 变化后 effect 自然重跑。
            */
+          const targetProjectId = autoEnterProjectId || selectedProject.id;
+          if (autoEnterProjectId && selectedProject.id !== autoEnterProjectId) {
+            return;
+          }
           locateLocatingRef.current = currentDatabaseId;
           (async () => {
             try {
               const res = await listDatabases(
-                selectedProject.id,
+                targetProjectId,
                 null,
                 1,
                 99999,
@@ -434,6 +444,7 @@ export default inject(
         treeData,
         view,
         selectedProject,
+        autoEnterProjectId,
       ]);
 
       function deleteDataSource(name: string, id: number) {
