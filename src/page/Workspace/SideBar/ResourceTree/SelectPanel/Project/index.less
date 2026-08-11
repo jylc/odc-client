@@ -51,6 +51,17 @@
   :global {
     .ant-tree-list {
       .ant-tree-treenode {
+        /**
+         * ResourceLayout 的 layout.less 在 .top 下全局隐藏了 .ant-tree-switcher
+         * （display:none）。本树需要展示展开/收起的三角箭头，这里覆盖为可见。
+         */
+        .ant-tree-switcher {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 16px;
+          line-height: 24px;
+        }
         .ant-tree-node-content-wrapper {
           .ant-dropdown-trigger {
             overflow: hidden;
@@ -82,7 +93,7 @@
             flex-grow: 0;
             flex-shrink: 0;
           }
-          .ant-tree-title {
+          > .ant-tree-title {
             position: relative;
             display: flex;
             flex: 1;
@@ -91,6 +102,26 @@
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
+            > .ant-tree-title {
+              display: block;
+              min-width: 0;
+              overflow: hidden;
+              white-space: nowrap;
+              text-overflow: ellipsis;
+            }
+            > .ant-dropdown-trigger {
+              flex: 1;
+              min-width: 0;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              > .ant-tree-title {
+                display: block;
+                min-width: 0;
+                overflow: hidden;
+                white-space: nowrap;
+                text-overflow: ellipsis;
+              }
+            }
           }
         }
       }
