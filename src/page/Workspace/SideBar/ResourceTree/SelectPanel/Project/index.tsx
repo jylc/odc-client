@@ -158,11 +158,13 @@ export default inject(
       /**
        * 数据库自动定位用的 ref：treeRef 用于 scrollTo，treeContainerRef 指向树外层 DOM
        * 节点，用于在不依赖 rc-tree virtual 的情况下把目标 treenode 滚进可视区；
-       * locatedDatabaseIdRef 避免重复定位。
+       * locatedDatabaseIdRef 避免重复定位；locateLocatingRef 标记异步定位进行中，避免
+       * 重复发起全量库请求。
        */
       const treeRef = useRef(null);
       const treeContainerRef = useRef<HTMLDivElement>(null);
       const locatedDatabaseIdRef = useRef<number>(null);
+      const locateLocatingRef = useRef<number>(null);
 
       useImperativeHandle(
         ref,
@@ -276,6 +278,12 @@ export default inject(
         if (locatedDatabaseIdRef.current === currentDatabaseId) {
           return;
         }
+        if (locateLocatingRef.current === currentDatabaseId) {
+          /**
+           * 该目标库正在异步定位中（已发起单次全量库请求），避免重复请求。
+           */
+          return;
+        }
         /**
          * 在 treeData 中查找：哪个数据源节点下已有目标数据库子节点（loadData 已完成）。
          */
@@ -311,29 +319,89 @@ export default inject(
               nodeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
             }
           }, 0);
-        } else {
+        } else if (selectedProject?.id) {
           /**
-           * 数据库子节点尚未加载：展开可能包含该库的数据源节点，触发 loadData。
-           * 这里展开所有尚未加载的数据源（数据源数量通常很少），让 rc-tree 触发 loadData
-           * 加载数据库列表，下一次 treeData 更新时本 effect 会重新执行并定位。
+           * 数据库子节点尚未加载：不再展开所有数据源（会对每个数据源发一次
+           * /api/v2/database/databases 请求，N 个数据源就是 N 次扇出），而是用一次
+           * listDatabases(projectId) 拉取整个项目的全部库，找到目标库所属数据源后只把
+           * 该数据源的子节点填入并展开，把 N 次请求降为 1 次。
            */
-          const keys = [...expandedKeys];
-          let changed = false;
-          treeData.forEach((node) => {
-            if (
-              node.type === ResourceNodeType.Datasource &&
-              !node.children?.length &&
-              !keys.includes(node.key)
-            ) {
-              keys.push(node.key);
-              changed = true;
+          locateLocatingRef.current = currentDatabaseId;
+          (async () => {
+            try {
+              const res = await listDatabases(
+                selectedProject.id,
+                null,
+                1,
+                99999,
+                null,
+                null,
+                null,
+                true,
+                true,
+              );
+              const allDatabases = (res?.contents || []).filter((db) => db.existed);
+              /**
+               * 按数据源 id 分组，与 loadData 的 Datasource 分支构建子节点方式一致。
+               */
+              const groupByDatasource = new Map<number, IDatabase[]>();
+              allDatabases.forEach((db) => {
+                const dsId = db?.dataSource?.id;
+                if (dsId == null) {
+                  return;
+                }
+                const arr = groupByDatasource.get(dsId) || [];
+                arr.push(db);
+                groupByDatasource.set(dsId, arr);
+              });
+              const targetDb = allDatabases.find((db) => db.id === currentDatabaseId);
+              const targetDsId = targetDb?.dataSource?.id;
+              setTreeData((prev) =>
+                prev.map((node) => {
+                  if (
+                    node.type !== ResourceNodeType.Datasource ||
+                    node.children?.length
+                  ) {
+                    return node;
+                  }
+                  const dsId = (node.data as IDatasource)?.id;
+                  const dbs = dsId != null ? groupByDatasource.get(dsId) : undefined;
+                  if (!dbs?.length) {
+                    return node;
+                  }
+                  return {
+                    ...node,
+                    children: dbs.map((database: IDatabase) =>
+                      DataBaseTreeData(undefined, database, database?.id, true, null),
+                    ),
+                  };
+                }),
+              );
+              /**
+               * 把已填好子节点的数据源标记为 loaded（避免再次展开时 rc-tree 重复触发
+               * loadData），并展开目标数据源。
+               */
+              const newLoadedKeys = [
+                ...loadedKeys,
+                ...Array.from(groupByDatasource.keys()).map(
+                  (dsId) => `ds-${dsId}`,
+                ),
+              ].filter((v, i, arr) => arr.indexOf(v) === i);
+              const targetKey = targetDsId != null ? `ds-${targetDsId}` : null;
+              onLoad?.(newLoadedKeys, {
+                event: 'load',
+                node: { key: targetKey } as any,
+              });
+            } catch (e) {
+              /**
+               * 单次全量拉取失败时降级：清空定位标记，让用户可手动展开数据源。
+               */
+            } finally {
+              locateLocatingRef.current = null;
             }
-          });
-          if (changed) {
-            setExpandedKeys(keys);
-          }
+          })();
         }
-      }, [currentDatabaseId, treeData, view, expandedKeys]);
+      }, [currentDatabaseId, treeData, view, expandedKeys, loadedKeys, selectedProject]);
 
       function deleteDataSource(name: string, id: number) {
         Modal.confirm({
