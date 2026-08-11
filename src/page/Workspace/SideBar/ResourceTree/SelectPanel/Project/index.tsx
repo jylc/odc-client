@@ -28,6 +28,7 @@ import ResourceTreeContext from '@/page/Workspace/context/ResourceTreeContext';
 import { loadNode } from '@/page/Workspace/SideBar/ResourceTree/helper';
 import { DataBaseTreeData } from '@/page/Workspace/SideBar/ResourceTree/Nodes/database';
 import TreeNodeMenu from '@/page/Workspace/SideBar/ResourceTree/TreeNodeMenu';
+import TreeStateStore from '@/page/Workspace/SideBar/ResourceTree/TreeStateStore';
 import useTreeState from '@/page/Workspace/SideBar/ResourceTree/useTreeState';
 import {
   ResourceNodeType,
@@ -110,6 +111,7 @@ export default inject(
     ) {
       const [searchKey, setSearchKey] = useState('');
       const context = useContext(ResourceTreeContext);
+      const { cache: treeStateStoreCache } = useContext(TreeStateStore);
       const {
         projectList,
         autoEnterProjectId,
@@ -177,6 +179,22 @@ export default inject(
       async function loadProjectDatasources(projectId: number) {
         setDsLoading(true);
         setEntrySeq((s) => s + 1);
+        /**
+         * 进入（或刷新）项目时，丢弃该项目所有历史 stateId 的树状态缓存（expandedKeys/
+         * loadedKeys）。rc-tree 的 loadData 仅在 key 不在 loadedKeys 时触发；若上一次访问
+         * 残留的 loadedKeys（如 ds-<datasourceId>）被复用，再次展开数据源将不会重新拉取
+         * 数据库，表现为"数据源展开后不显示数据库"。这里在加载新数据源列表前清掉所有
+         * 以 `project-ds-tree-${projectId}-` 为前缀的缓存，配合 entrySeq 生成的新 stateId，
+         * 确保本次进入使用全新（空）的展开/加载状态。
+         */
+        const cacheStore = treeStateStoreCache;
+        if (cacheStore) {
+          Object.keys(cacheStore).forEach((k) => {
+            if (k.startsWith(`project-ds-tree-${projectId}-`)) {
+              delete cacheStore[k];
+            }
+          });
+        }
         try {
           const data = await getConnectionList({ projectId, page: 1, size: 99999 });
           const contents = data?.contents || [];
