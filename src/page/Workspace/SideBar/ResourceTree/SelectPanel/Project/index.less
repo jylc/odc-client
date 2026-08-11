@@ -75,6 +75,20 @@
             :local(.envTip.envTipPersonal) {
               display: none;
             }
+            /**
+             * TreeNodeMenu 渲染的行（数据库 / 表视图等分类与对象）：hover 时显示行操作、
+             * 隐藏环境标识，与主资源树（ResourceTree/index.less）表现一致。menuActions / env
+             * 是主 index.less 的 :local 类（经 treeStyles 引入），在本树中用 :global 按哈希前缀
+             * 定位。
+             */
+            :global {
+              [class*='menuActions'] {
+                display: flex;
+              }
+              [class*='env']:not([class*='envTip']) {
+                display: none;
+              }
+            }
           }
           :local(.envTip) {
             :global {
@@ -92,6 +106,32 @@
           .ant-tree-iconEle {
             flex-grow: 0;
             flex-shrink: 0;
+          }
+          /**
+           * TreeNodeMenu 的行操作（menuActions）与环境标识（env）默认绝对定位、不占布局空间，
+           * 否则当 .ant-tree-title 为 flex 时会把操作图标挤到第二行、导致行高翻倍（表/视图等
+           * 分类行变成 56px）。这里复刻主 ResourceTree/index.less 的定位规则。
+           */
+          :global {
+            [class*='menuActions'] {
+              position: absolute;
+              top: 0px;
+              right: 4px;
+              bottom: 0px;
+              display: none;
+              align-items: center;
+              background-color: transparent;
+            }
+            [class*='env']:not([class*='envTip']) {
+              position: absolute;
+              top: 0px;
+              right: 8px;
+              bottom: 0px;
+              align-items: center;
+              .ant-badge-status-dot {
+                border-radius: 0px;
+              }
+            }
           }
           > .ant-tree-title {
             position: relative;
