@@ -393,7 +393,9 @@ export default inject(
               );
               /**
                * 把已填好子节点的数据源标记为 loaded（避免再次展开时 rc-tree 重复触发
-               * loadData），并展开目标数据源。
+               * loadData），并展开目标数据源。直接用 setExpandedKeys 显式展开目标，不依赖
+               * onLoad 间接设置（onLoad 内部用的 expandedKeys 闭包值在 entrySeq 变化后可能
+               * 不准），确保首次定位即展开。
                */
               const newLoadedKeys = [
                 ...loadedKeysRef.current,
@@ -402,6 +404,13 @@ export default inject(
                 ),
               ].filter((v, i, arr) => arr.indexOf(v) === i);
               const targetKey = targetDsId != null ? `ds-${targetDsId}` : null;
+              if (targetKey) {
+                const curKeys = [...expandedKeysRef.current];
+                if (!curKeys.includes(targetKey)) {
+                  curKeys.push(targetKey);
+                }
+                setExpandedKeys(curKeys);
+              }
               onLoad?.(newLoadedKeys, {
                 event: 'load',
                 node: { key: targetKey } as any,
