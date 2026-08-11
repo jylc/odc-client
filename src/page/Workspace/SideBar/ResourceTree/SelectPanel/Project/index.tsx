@@ -152,18 +152,27 @@ export default inject(
       const stateId = selectedProject
         ? `project-ds-tree-${selectedProject.id}-${entrySeq}`
         : 'project-ds-tree';
-      const { expandedKeys, loadedKeys, onExpand, onLoad, setExpandedKeys } = useTreeState(stateId, {
-        setCurrentDatabaseOnExpand: false,
-      });
-
       /**
        * 数据库自动定位用的 ref：treeRef 用于 scrollTo，treeContainerRef 指向树外层 DOM
        * 节点，用于在不依赖 rc-tree virtual 的情况下把目标 treenode 滚进可视区；
-       * locateLocatingRef 标记异步定位进行中，避免重复发起全量库请求。
+       * locateLocatingRef 标记异步定位进行中，避免重复发起全量库请求；
+       * expandedKeysRef / loadedKeysRef 镜像最新的 expandedKeys / loadedKeys，供定位 effect
+       * 在不把它们加入依赖数组的情况下读取最新值（避免用户收起数据源即被 effect 重新展开）。
        */
       const treeRef = useRef(null);
       const treeContainerRef = useRef<HTMLDivElement>(null);
       const locateLocatingRef = useRef<number>(null);
+      const expandedKeysRef = useRef<(string | number)[]>([]);
+      const loadedKeysRef = useRef<(string | number)[]>([]);
+      const { expandedKeys, loadedKeys, onExpand, onLoad, setExpandedKeys } = useTreeState(stateId, {
+        setCurrentDatabaseOnExpand: false,
+      });
+      /**
+       * 镜像 expandedKeys / loadedKeys 到 ref，供定位 effect 读取最新值而不把它们加入
+       * 依赖数组（否则用户收起数据源会触发 effect 立即重新展开）。
+       */
+      expandedKeysRef.current = expandedKeys;
+      loadedKeysRef.current = loadedKeys;
 
       useImperativeHandle(
         ref,
@@ -255,20 +264,29 @@ export default inject(
        * 重复触发由 view !== 'projectList' 守卫避免。
        */
       useEffect(() => {
-        if (!autoEnterProjectId || view !== 'projectList' || !projectList?.length) {
+        if (!autoEnterProjectId || !projectList?.length) {
+          return;
+        }
+        /**
+         * 当前已在某个项目的数据源列表视图、但显示的不是目标项目时，也要切换到目标项目，
+         * 否则定位会找不到目标库（目标库属于另一个项目）。
+         */
+        if (view === 'datasourceList' && selectedProject?.id === autoEnterProjectId) {
           return;
         }
         const project = projectList.find((p) => p.id === autoEnterProjectId);
         if (project) {
           enterProject(project);
         }
-      }, [autoEnterProjectId, projectList, view]);
+      }, [autoEnterProjectId, projectList, view, selectedProject]);
 
       /**
        * 自动定位数据库：currentDatabaseId 被设置（或再次点击定位时 locateRequestId 自增）。
        * 找到目标数据库所属数据源节点，展开它，待子节点出现后高亮并滚动定位。
-       * 该 effect 是幂等的——每次运行都确保目标数据源已展开并滚动到目标库；不再用永久
-       * ref 阻断，这样"展开后收起再点定位"也能重新展开。
+       * 仅由 currentDatabaseId / locateRequestId / treeData / view / selectedProject / loadedKeys
+       * 驱动——**不依赖 expandedKeys**，否则用户手动收起数据源（expandedKeys 变化）会立刻被
+       * 本 effect 重新展开，导致"收不起来"。收起后想重新展开，再次点击定位即可（locateRequestId
+       * 自增驱动 effect 重跑）。
        */
       useEffect(() => {
         if (!currentDatabaseId || view !== 'datasourceList' || !treeData?.length) {
@@ -293,8 +311,9 @@ export default inject(
         if (datasourceNode) {
           /**
            * 数据库子节点已加载：确保数据源展开（收起后再次定位时重新展开）并滚动到目标库。
+           * 通过 expandedKeysRef 读最新值（不把 expandedKeys 放进依赖，避免收起即被重展开）。
            */
-          const keys = [...expandedKeys];
+          const keys = [...expandedKeysRef.current];
           if (!keys.includes(datasourceNode.key)) {
             keys.push(datasourceNode.key);
             setExpandedKeys(keys);
@@ -377,7 +396,7 @@ export default inject(
                * loadData），并展开目标数据源。
                */
               const newLoadedKeys = [
-                ...loadedKeys,
+                ...loadedKeysRef.current,
                 ...Array.from(groupByDatasource.keys()).map(
                   (dsId) => `ds-${dsId}`,
                 ),
@@ -405,8 +424,6 @@ export default inject(
         locateRequestId,
         treeData,
         view,
-        expandedKeys,
-        loadedKeys,
         selectedProject,
       ]);
 
