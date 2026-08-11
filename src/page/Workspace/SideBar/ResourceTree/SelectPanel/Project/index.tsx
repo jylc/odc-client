@@ -156,9 +156,12 @@ export default inject(
       });
 
       /**
-       * 数据库自动定位用的 ref：treeRef 用于 scrollTo，locatedDatabaseIdRef 避免重复定位。
+       * 数据库自动定位用的 ref：treeRef 用于 scrollTo，treeContainerRef 指向树外层 DOM
+       * 节点，用于在不依赖 rc-tree virtual 的情况下把目标 treenode 滚进可视区；
+       * locatedDatabaseIdRef 避免重复定位。
        */
       const treeRef = useRef(null);
+      const treeContainerRef = useRef<HTMLDivElement>(null);
       const locatedDatabaseIdRef = useRef<number>(null);
 
       useImperativeHandle(
@@ -294,7 +297,19 @@ export default inject(
           }
           setExpandedKeys(keys);
           setTimeout(() => {
-            treeRef?.current?.scrollTo({ key: currentDatabaseId });
+            /**
+             * 本树未开启 virtual（未设 height/itemHeight），rc-tree 的 scrollTo 设置的是
+             * 内部 holder 的 scrollTop，而实际滚动容器是外层 .list（overflow:auto），因此
+             * scrollTo 无法把视口外的节点滚进可视区。这里改用原生 scrollIntoView 直接定位
+             * 到目标 treenode DOM。selectedKeys 已设为 [currentDatabaseId]，故带
+             * ant-tree-treenode-selected 的节点即目标库节点。
+             */
+            const nodeEl = treeContainerRef.current?.querySelector?.(
+              '.ant-tree-treenode-selected',
+            );
+            if (nodeEl && typeof nodeEl.scrollIntoView === 'function') {
+              nodeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
           }, 0);
         } else {
           /**
@@ -706,6 +721,7 @@ export default inject(
               <div className={styles.list}>
                 <Spin spinning={dsLoading}>
                   {filteredTreeData?.length ? (
+                    <div ref={treeContainerRef}>
                     <Tree
                       ref={treeRef}
                       className={styles.tree}
@@ -720,6 +736,7 @@ export default inject(
                       onLoad={onLoad}
                       selectedKeys={currentDatabaseId ? [currentDatabaseId] : []}
                     />
+                    </div>
                   ) : (
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
                   )}

@@ -179,7 +179,18 @@ const ResourceTree: React.FC<IProps> = function ({
     const group = treeData.find((node) => node.children?.some((child) => child.key === key));
     setExpandedKeys(group ? [group.key, key] : [key]);
     treeContext.setCurrentDatabaseId(key);
-    treeRef?.current?.scrollTo({ key });
+    setTimeout(() => {
+      /**
+       * 同 locate effect：rc-tree 的 scrollTo 在非 virtual 下无法滚动外层容器，改用原生
+       * scrollIntoView 定位。selectedKeys 即将更新为 [key]，但此处直接按即将高亮的节点
+       * 滚动，避免等下一帧渲染。先用当前已展开节点定位，若未命中则等 selectedKeys 更新后
+       * 由 locate effect 兜底。
+       */
+      const nodeEl = treeWrapperRef.current?.querySelector?.('.ant-tree-treenode-selected');
+      if (nodeEl && typeof nodeEl.scrollIntoView === 'function') {
+        nodeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }, 0);
   };
 
   useEffect(() => {
@@ -217,7 +228,16 @@ const ResourceTree: React.FC<IProps> = function ({
       setExpandedKeys(keys);
     }
     setTimeout(() => {
-      treeRef?.current?.scrollTo({ key: databaseId });
+      /**
+       * 本树未开启 virtual（未设 height/itemHeight），rc-tree 的 scrollTo 设置的是内部
+       * holder 的 scrollTop，而实际滚动容器是外层（overflow:auto），scrollTo 无法把视口外
+       * 的节点滚进可视区。selectedKeys 已设为 [currentDatabaseId]，故带
+       * ant-tree-treenode-selected 的节点即目标库节点，改用原生 scrollIntoView 定位。
+       */
+      const nodeEl = treeWrapperRef.current?.querySelector?.('.ant-tree-treenode-selected');
+      if (nodeEl && typeof nodeEl.scrollIntoView === 'function') {
+        nodeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
     }, 0);
   }, [treeContext.currentDatabaseId, treeData]);
 
