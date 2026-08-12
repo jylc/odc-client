@@ -53,6 +53,13 @@ interface IResourceTreeContext {
    */
   autoEnterProjectId?: number;
   setAutoEnterProjectId?: (v: number) => void;
+  /**
+   * 每次带 projectId 深链进入时自增的请求序号。即便目标项目 id 不变（已在该项目页签下、
+   * setAutoEnterProjectId 同值短路），该序号也会变化，驱动 Project 组件的 autoEnterProjectId
+   * effect 重新执行并刷新项目内数据源，保证"已打开项目页签下也能刷新出新增数据源"。
+   */
+  autoEnterRequestId?: number;
+  setAutoEnterRequestId?: (v: number) => void;
 }
 
 const ResourceTreeContext = React.createContext<IResourceTreeContext>({

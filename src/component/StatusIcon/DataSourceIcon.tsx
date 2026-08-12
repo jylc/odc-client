@@ -21,8 +21,15 @@ import { formatMessage } from '@/util/intl';
 
 import { getDataSourceStyleByConnectType } from '@/common/datasource';
 import datasourceStatus from '@/store/datasourceStatus';
+import { observer } from 'mobx-react';
 
-export default function StatusIcon({ item }: { item: IConnection }) {
+/**
+ * 用 observer 包裹：StatusIcon 直接读取 datasourceStatus.statusMap（MobX observable）。
+ * 若不是 observer，元素创建后即便 statusMap 异步更新（如 batchTest 完成把状态从
+ * INACTIVE/未知 变为 ACTIVE），本组件也不会重渲染，图标会一直停留在创建时的灰色态，
+ * 直到父组件因别的原因重渲染并重建本元素。observer 让它在 statusMap 变化时自动刷新。
+ */
+const StatusIcon = observer(function StatusIcon({ item }: { item: IConnection }) {
   const statusInfo = datasourceStatus.statusMap.get(item.id) || item.status;
   let status = statusInfo?.status;
   const icon = getDataSourceStyleByConnectType(item.type)?.icon;
@@ -98,4 +105,6 @@ export default function StatusIcon({ item }: { item: IConnection }) {
       );
     }
   }
-}
+});
+
+export default StatusIcon;

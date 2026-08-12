@@ -59,6 +59,7 @@ export default function WorkspaceStore({ children }) {
    * 保持 SelectPanel 打开（显示带返回箭头的项目内数据源视图）。进入后由 Project 组件清空。
    */
   const [autoEnterProjectId, setAutoEnterProjectId] = useState<number>(null);
+  const [autoEnterRequestId, setAutoEnterRequestId] = useState<number>(0);
 
   function setSelectProjectId(v: number) {
     _setSelectProjectId(v);
@@ -151,6 +152,8 @@ export default function WorkspaceStore({ children }) {
         pollingDatabase,
         autoEnterProjectId,
         setAutoEnterProjectId,
+        autoEnterRequestId,
+        setAutoEnterRequestId,
       }}
     >
       <ActivityBarContext.Provider

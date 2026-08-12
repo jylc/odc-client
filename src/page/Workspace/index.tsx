@@ -101,6 +101,13 @@ const Workspace: React.FC<WorkspaceProps> = (props: WorkspaceProps) => {
       }
       resourceTreeContext?.setSelectTabKey(ResourceTreeTab.project);
       resourceTreeContext?.setAutoEnterProjectId?.(projectId);
+      /**
+       * 自增进入项目请求序号。即便目标项目 id 不变（已在该项目页签下、setAutoEnterProjectId
+       * 同值短路），该序号也会变化，驱动 Project 组件重新刷新项目内数据源，从而显示新增的数据源。
+       */
+      resourceTreeContext?.setAutoEnterRequestId?.(
+        (resourceTreeContext.autoEnterRequestId || 0) + 1,
+      );
       databaseId && resourceTreeContext?.setCurrentDatabaseId(databaseId);
       databaseId && openNewSQLPage(databaseId, 'project');
     } else if (datasourceId) {

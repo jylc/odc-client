@@ -119,6 +119,7 @@ export default inject(
         currentDatabaseId,
         setCurrentDatabaseId,
         locateRequestId,
+        autoEnterRequestId,
         reloadProjectList,
         reloadDatasourceList,
       } = context;
@@ -167,10 +168,10 @@ export default inject(
       const expandedKeysRef = useRef<(string | number)[]>([]);
       const loadedKeysRef = useRef<(string | number)[]>([]);
       /**
-       * 记录上次 autoEnterProjectId effect 已处理过的目标项目 id，避免依赖变化时重复
-       * 触发"全部刷新"。backToProjectList 时清空，再次进入同一项目仍会刷新。
+       * 记录上次 autoEnterProjectId effect 已处理过的 (目标项目 id, 进入请求序号)，
+       * 避免依赖变化时重复触发"全部刷新"。backToProjectList 时清空，再次进入仍会刷新。
        */
-      const autoEnterDoneRef = useRef<number>(null);
+      const autoEnterDoneRef = useRef<{ projectId: number; requestId: number }>(null);
       const { expandedKeys, loadedKeys, onExpand, onLoad, setExpandedKeys } = useTreeState(stateId, {
         setCurrentDatabaseOnExpand: false,
       });
@@ -272,22 +273,27 @@ export default inject(
        * 避免外链首次进入时后端项目↔数据源关联尚未完全同步导致项目下数据源列表不完整、
        * 需手动刷新的问题。
        *
+       * 即便已在该项目页签下（autoEnterProjectId 同值、setAutoEnterProjectId 短路），每次
+       * 带 projectId 深链进入都会自增 autoEnterRequestId，本 effect 据此重新刷新，从而能
+       * 显示新增的数据源。
+       *
        * 注意：进入后**不清空** autoEnterProjectId。Container 依赖它保持 SelectPanel 打开
        * （不因 currentDatabaseId 切到主资源树）。仅在 backToProjectList 时才清空。
-       * 用 autoEnterDoneRef 记录上次处理过的 autoEnterProjectId，避免在 effect 依赖变化
-       * 时重复刷新（只在 autoEnterProjectId 真正变化时刷新一次）。
+       * 用 autoEnterDoneRef 记录上次处理过的 (autoEnterProjectId, autoEnterRequestId)，
+       * 避免依赖（view/selectedProject/projectList）变化时重复刷新；只有当目标项目或请求
+       * 序号真正变化时才刷新。
        */
       useEffect(() => {
         if (!autoEnterProjectId || !projectList?.length) {
           return;
         }
         /**
-         * 当前已在目标项目的数据源列表视图，且本次 autoEnterProjectId 已处理过，直接返回。
+         * 仅当目标项目或进入请求序号变化时才处理，避免 view/selectedProject/projectList
+         * 变化导致重复刷新。
          */
         if (
-          view === 'datasourceList' &&
-          selectedProject?.id === autoEnterProjectId &&
-          autoEnterDoneRef.current === autoEnterProjectId
+          autoEnterDoneRef.current?.projectId === autoEnterProjectId &&
+          autoEnterDoneRef.current?.requestId === autoEnterRequestId
         ) {
           return;
         }
@@ -299,9 +305,12 @@ export default inject(
           reloadProjectList?.();
           reloadDatasourceList?.();
           enterProject(project);
-          autoEnterDoneRef.current = autoEnterProjectId;
+          autoEnterDoneRef.current = {
+            projectId: autoEnterProjectId,
+            requestId: autoEnterRequestId,
+          };
         }
-      }, [autoEnterProjectId, projectList, view, selectedProject]);
+      }, [autoEnterProjectId, autoEnterRequestId, projectList]);
 
       /**
        * 自动定位数据库：currentDatabaseId 被设置（或再次点击定位时 locateRequestId 自增）。
