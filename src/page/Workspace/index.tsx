@@ -36,7 +36,7 @@ import { history, useLocation, useParams, useSearchParams } from '@umijs/max';
 import { message, Modal } from 'antd';
 import { toInteger } from 'lodash';
 import { inject, observer } from 'mobx-react';
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import ActivityBar from './ActivityBar/ index';
 import ResourceTreeContext, { ResourceTreeTab } from './context/ResourceTreeContext';
 import WorkspaceStore from './context/WorkspaceStore';
@@ -70,10 +70,19 @@ const Workspace: React.FC<WorkspaceProps> = (props: WorkspaceProps) => {
   const [isReady, setIsReady] = useState<boolean>(false);
   const { tabKey } = useParams<{ tabKey: string }>();
 
+  /**
+   * 首次挂载时 Container.initData() 已加载过数据源/项目列表。带参深链"首次打开页面"
+   * 时 resolveParams 也会跑一次（isReady 翻 true 触发），此时不需要再 reload（与 initData
+   * 并发重复调用同一个 useRequest 的 run，会导致数据源列表一直处于加载态）。仅在"再次
+   * 带参进入"（非首次）时才刷新。用 ref 标记是否已执行过一次 resolveParams。
+   */
+  const hasResolvedRef = useRef(false);
   function resolveParams() {
     const projectId = toInteger(params.get('projectId'));
     const databaseId = toInteger(params.get('databaseId'));
     const datasourceId = toInteger(params.get('datasourceId'));
+    const isFirstResolve = !hasResolvedRef.current;
+    hasResolvedRef.current = true;
     if (projectId) {
       /**
        * 从项目页"登录数据库"进入时，侧边栏应停留在 SelectPanel 的项目内数据源视图
@@ -83,21 +92,24 @@ const Workspace: React.FC<WorkspaceProps> = (props: WorkspaceProps) => {
        * SelectPanel 打开；设置 currentDatabaseId 让 Project 树自动定位/高亮目标数据库。
        * Container 的 effect 在 autoEnterProjectId 存在时不会因 currentDatabaseId 关闭面板。
        *
-       * 外部带参深链进入时（location.search 变化 → params 引用变化 → 本函数被 effect
-       * 重新调用），刷新项目列表与数据源列表，使侧边栏树反映最新数据；项目内数据源由
-       * autoEnterProjectId → enterProject → loadProjectDatasources 单独刷新。
+       * 仅在"再次带参进入"（非首次挂载，首次由 Container.initData 加载）时刷新项目/数据源
+       * 列表；项目内数据源由 autoEnterProjectId → enterProject → loadProjectDatasources 刷新。
        */
-      resourceTreeContext?.reloadProjectList?.();
-      resourceTreeContext?.reloadDatasourceList?.();
+      if (!isFirstResolve) {
+        resourceTreeContext?.reloadProjectList?.();
+        resourceTreeContext?.reloadDatasourceList?.();
+      }
       resourceTreeContext?.setSelectTabKey(ResourceTreeTab.project);
       resourceTreeContext?.setAutoEnterProjectId?.(projectId);
       databaseId && resourceTreeContext?.setCurrentDatabaseId(databaseId);
       databaseId && openNewSQLPage(databaseId, 'project');
     } else if (datasourceId) {
       /**
-       * 外部带 datasourceId 深链进入时刷新数据源列表，使数据源目录树反映最新数据。
+       * 仅在"再次带参进入"时刷新数据源列表（首次由 Container.initData 加载）。
        */
-      resourceTreeContext?.reloadDatasourceList?.();
+      if (!isFirstResolve) {
+        resourceTreeContext?.reloadDatasourceList?.();
+      }
       resourceTreeContext?.setSelectTabKey(ResourceTreeTab.datasource);
       resourceTreeContext?.setSelectDatasourceId(datasourceId);
       databaseId && resourceTreeContext?.setCurrentDatabaseId(databaseId);
