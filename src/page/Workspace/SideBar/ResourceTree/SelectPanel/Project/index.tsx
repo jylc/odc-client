@@ -119,6 +119,8 @@ export default inject(
         currentDatabaseId,
         setCurrentDatabaseId,
         locateRequestId,
+        reloadProjectList,
+        reloadDatasourceList,
       } = context;
 
       const [view, setView] = useState<View>('projectList');
@@ -164,6 +166,11 @@ export default inject(
       const locateLocatingRef = useRef<number>(null);
       const expandedKeysRef = useRef<(string | number)[]>([]);
       const loadedKeysRef = useRef<(string | number)[]>([]);
+      /**
+       * 记录上次 autoEnterProjectId effect 已处理过的目标项目 id，避免依赖变化时重复
+       * 触发"全部刷新"。backToProjectList 时清空，再次进入同一项目仍会刷新。
+       */
+      const autoEnterDoneRef = useRef<number>(null);
       const { expandedKeys, loadedKeys, onExpand, onLoad, setExpandedKeys } = useTreeState(stateId, {
         setCurrentDatabaseOnExpand: false,
       });
@@ -248,6 +255,7 @@ export default inject(
         setSelectedProject(null);
         setDatasources([]);
         setTreeData([]);
+        autoEnterDoneRef.current = null;
         /**
          * 返回项目列表时清掉一次性信号，避免残留。
          */
@@ -259,24 +267,39 @@ export default inject(
        * 从项目页"登录数据库"进入时（autoEnterProjectId 被设置），自动进入该项目的数据源
        * 列表视图（带返回箭头），与直接访问后手动点进项目的表现一致。
        *
+       * 进入时一并刷新项目列表与数据源目录（reloadProjectList / reloadDatasourceList），
+       * 加上 enterProject → loadProjectDatasources 刷新项目内数据源——即"全部刷新一遍"，
+       * 避免外链首次进入时后端项目↔数据源关联尚未完全同步导致项目下数据源列表不完整、
+       * 需手动刷新的问题。
+       *
        * 注意：进入后**不清空** autoEnterProjectId。Container 依赖它保持 SelectPanel 打开
        * （不因 currentDatabaseId 切到主资源树）。仅在 backToProjectList 时才清空。
-       * 重复触发由 view !== 'projectList' 守卫避免。
+       * 用 autoEnterDoneRef 记录上次处理过的 autoEnterProjectId，避免在 effect 依赖变化
+       * 时重复刷新（只在 autoEnterProjectId 真正变化时刷新一次）。
        */
       useEffect(() => {
         if (!autoEnterProjectId || !projectList?.length) {
           return;
         }
         /**
-         * 当前已在某个项目的数据源列表视图、但显示的不是目标项目时，也要切换到目标项目，
-         * 否则定位会找不到目标库（目标库属于另一个项目）。
+         * 当前已在目标项目的数据源列表视图，且本次 autoEnterProjectId 已处理过，直接返回。
          */
-        if (view === 'datasourceList' && selectedProject?.id === autoEnterProjectId) {
+        if (
+          view === 'datasourceList' &&
+          selectedProject?.id === autoEnterProjectId &&
+          autoEnterDoneRef.current === autoEnterProjectId
+        ) {
           return;
         }
         const project = projectList.find((p) => p.id === autoEnterProjectId);
         if (project) {
+          /**
+           * 全部刷新一遍：项目列表 + 数据源目录 +（enterProject 内）项目内数据源。
+           */
+          reloadProjectList?.();
+          reloadDatasourceList?.();
           enterProject(project);
+          autoEnterDoneRef.current = autoEnterProjectId;
         }
       }, [autoEnterProjectId, projectList, view, selectedProject]);
 
