@@ -63,6 +63,14 @@ export default function Reload({
 
   const { run, cancel } = useRequest(
     async () => {
+      if (!databaseList?.length) {
+        /**
+         * 懒加载模式下尚未展开任何数据源时，loadedDatabases 可能为空。空列表的 every() 恒为
+         * true 会误判为"全部已同步"，这里保持初始态并继续轮询，等库加载后再判定。
+         */
+        setState(statusMap.NOTSYNCED);
+        return;
+      }
       if (
         databaseList?.every((item) =>
           [DBObjectSyncStatus.SYNCED, DBObjectSyncStatus.FAILED].includes(item.objectSyncStatus),
@@ -95,6 +103,11 @@ export default function Reload({
     {
       pollingInterval: 3000,
       pollingWhenHidden: false,
+      /**
+       * 懒加载主资源树下，loadedDatabases 会随数据源展开而变化；refreshDeps 使其在变化时
+       * 重新评估同步状态（降级：仅统计已加载数据源的库）。
+       */
+      refreshDeps: [databaseList],
     },
   );
 

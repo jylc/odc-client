@@ -19,7 +19,6 @@ import { deleteConnection, getConnectionList } from '@/common/network/connection
 import { getProject, listProjects } from '@/common/network/project';
 import Action from '@/component/Action';
 import ConnectionPopover from '@/component/ConnectionPopover';
-import StatusIcon from '@/component/StatusIcon/DataSourceIcon';
 import { EnvColorMap } from '@/constant';
 import { IDatabase } from '@/d.ts/database';
 import { IDatasource } from '@/d.ts/datasource';
@@ -66,45 +65,18 @@ import {
   useState,
 } from 'react';
 import ResourceLayout from '../../Layout';
+import {
+  DS_DB_PAGE_SIZE,
+  LM_DS_PREFIX,
+  LM_PROJECT_PREFIX,
+  PROJECT_DS_PAGE_SIZE,
+  datasourceToNode,
+  makeLoadMoreNode,
+} from '../../lazyTreeHelpers';
 import styles from './index.less';
 import { ReactComponent as ProjectSvg } from '@/svgr/project_space.svg';
 
 type View = 'projectList' | 'datasourceList';
-
-/**
- * 嵌套树分批加载的每页条数与"加载更多"哨兵节点 key 前缀。
- * - 项目内数据源列表：每页 50；
- * - 数据源下库列表：每页 100；
- * 哨兵节点 isLeaf=true，不会被 rc-tree 的 loadData 触发，仅通过 titleRender 点击拉取下一页。
- */
-const PROJECT_DS_PAGE_SIZE = 50;
-const DS_DB_PAGE_SIZE = 100;
-const LM_PROJECT_PREFIX = 'lm-project-';
-const LM_DS_PREFIX = 'lm-ds-';
-
-function makeLoadMoreNode(key: string): ResourceTreeDataNode {
-  return {
-    key,
-    title: formatMessage({
-      id: 'odc.ResourceTree.LoadMore',
-      defaultMessage: '加载更多',
-    }),
-    type: ResourceNodeType.LoadMore,
-    isLeaf: true,
-    selectable: false,
-  };
-}
-
-function datasourceToNode(item: IDatasource): ResourceTreeDataNode {
-  return {
-    title: item.name,
-    key: `ds-${item.id}`,
-    icon: <StatusIcon item={item} />,
-    isLeaf: false,
-    type: ResourceNodeType.Datasource,
-    data: item,
-  };
-}
 
 interface IProps {
   closeSelectPanel: () => void;

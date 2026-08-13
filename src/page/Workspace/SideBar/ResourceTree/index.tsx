@@ -16,7 +16,7 @@
 
 import { IDatabase } from '@/d.ts/database';
 import { SessionManagerStore } from '@/store/sessionManager';
-import { Input, Space, Tree } from 'antd';
+import { Input, Space, Tree, message } from 'antd';
 import { DataNode } from 'antd/lib/tree';
 import { EventDataNode } from 'antd/lib/tree';
 import { throttle } from 'lodash';
@@ -43,12 +43,27 @@ import SyncMetadata from '@/component/Button/SyncMetadata';
 import { IManagerResourceType } from '@/d.ts';
 import { ModalStore } from '@/store/modal';
 import type { SettingStore } from '@/store/setting';
+import { listDatabases } from '@/common/network/database';
+import { getConnectionList } from '@/common/network/connection';
+import { formatMessage } from '@/util/intl';
+import {
+  DS_DB_PAGE_SIZE,
+  LM_DS_PREFIX,
+  LM_PROJECT_PREFIX,
+  PROJECT_DS_PAGE_SIZE,
+  datasourceToNode,
+  makeLoadMoreNode,
+} from './lazyTreeHelpers';
 
 interface IProps {
   sessionManagerStore?: SessionManagerStore;
   modalStore?: ModalStore;
   settingStore?: SettingStore;
-  databases: IDatabase[];
+  /**
+   * 非懒加载模式下用于构建树的全量库列表（ObjectTreePanel 仍用此路径）。
+   * 懒加载模式(lazy=true)下忽略，改由组件内部按数据源分页懒加载。
+   */
+  databases?: IDatabase[];
   reloadDatabase: () => void;
   pollingDatabase: () => void;
   title: React.ReactNode;
@@ -62,6 +77,11 @@ interface IProps {
    * 不再显示库本身。用于 SQL 编辑器内嵌的对象树（只关心当前库的对象，无需库这一层）。
    */
   flattenDatabase?: boolean;
+  /**
+   * 懒加载模式：主资源树(DatabaseTree)启用后，不再用全量 databases 分组，而是先分页拉数据源、
+   * 展开数据源再分页懒加载库（数据源模式则直接分页懒加载该数据源库）。
+   */
+  lazy?: boolean;
 }
 
 const ResourceTree: React.FC<IProps> = function ({
@@ -78,6 +98,7 @@ const ResourceTree: React.FC<IProps> = function ({
   showTip = false,
   enableFilter,
   stateId,
+  lazy = false,
 }) {
   const { expandedKeys, loadedKeys, sessionIds, setSessionId, onExpand, onLoad, setExpandedKeys } =
     useTreeState(stateId);
@@ -109,7 +130,279 @@ const ResourceTree: React.FC<IProps> = function ({
     };
   }, []);
 
+  /**
+   * ===== 懒加载模式（lazy=true）=====
+   * 主资源树启用后：项目模式先分页拉数据源、展开数据源再分页懒加载库；
+   * 数据源模式直接分页懒加载该数据源库。用"加载更多"哨兵节点追加。
+   * 与 SelectPanel/Project 同一模型，helper 见 lazyTreeHelpers.tsx。
+   * 非懒加载路径（ObjectTreePanel）完全不受影响。
+   */
+  const [lazyTreeData, setLazyTreeData] = useState<TreeDataNode[]>([]);
+  const dsListPageInfoRef = useRef<{
+    projectId: number;
+    page: number;
+    size: number;
+    totalPages: number;
+  }>(null);
+  const dsDbPageInfoRef = useRef<Map<number, { page: number; size: number; totalPages: number }>>(
+    new Map(),
+  );
+  const [loadMoreLoadingKeys, setLoadMoreLoadingKeys] = useState<Set<string>>(new Set());
+  const lazyLocateLocatingRef = useRef<number>(null);
+  const lazyProjectId = treeContext.selectProjectId;
+  const lazyDatasourceId = treeContext.selectDatasourceId;
+
+  const buildDbChildNodes = (list: IDatabase[]) =>
+    list.map((database) => DataBaseTreeData(undefined, database, database?.id, true, null));
+
+  const lazyLoadProjectDatasources = useCallback(async (projectId: number) => {
+    try {
+      const data = await getConnectionList({
+        projectId,
+        page: 1,
+        size: PROJECT_DS_PAGE_SIZE,
+      });
+      const contents = data?.contents || [];
+      const totalPages = data?.page?.totalPages ?? (contents.length ? 1 : 0);
+      dsListPageInfoRef.current = {
+        projectId,
+        page: 1,
+        size: PROJECT_DS_PAGE_SIZE,
+        totalPages,
+      };
+      const nodes = contents.map(datasourceToNode);
+      if (1 < totalPages) {
+        nodes.push(makeLoadMoreNode(LM_PROJECT_PREFIX + projectId));
+      }
+      setLazyTreeData(nodes);
+    } catch (e) {
+      message.error(
+        formatMessage({
+          id: 'odc.ResourceTree.Datasource.FailedToLoad',
+          defaultMessage: '加载数据源失败',
+        }),
+      );
+    }
+  }, []);
+
+  const lazyLoadDatasourceDatabases = useCallback(async (datasourceId: number, page = 1) => {
+    try {
+      const res = await listDatabases(
+        null,
+        datasourceId,
+        page,
+        DS_DB_PAGE_SIZE,
+        null,
+        null,
+        null,
+        true,
+        true,
+      );
+      const dbs = (res?.contents || []).filter((db) => db.existed);
+      const totalPages = res?.page?.totalPages ?? (res?.contents?.length ? 1 : 0);
+      dsDbPageInfoRef.current.set(datasourceId, {
+        page,
+        size: DS_DB_PAGE_SIZE,
+        totalPages,
+      });
+      const nodes: TreeDataNode[] = buildDbChildNodes(dbs);
+      if (page < totalPages) {
+        nodes.push(makeLoadMoreNode(LM_DS_PREFIX + datasourceId));
+      }
+      setLazyTreeData((prev) => {
+        if (page === 1) {
+          return nodes;
+        }
+        const withoutLm = prev.filter((n) => n.key !== LM_DS_PREFIX + datasourceId);
+        return [...withoutLm, ...nodes];
+      });
+      return dbs;
+    } catch (e) {
+      message.error(
+        formatMessage({
+          id: 'odc.ResourceTree.Datasource.FailedToLoad',
+          defaultMessage: '加载失败',
+        }),
+      );
+    }
+  }, []);
+
+  const lazyLoadMoreProjectDatasources = useCallback(async () => {
+    const info = dsListPageInfoRef.current;
+    if (!info) {
+      return;
+    }
+    const lmKey = LM_PROJECT_PREFIX + info.projectId;
+    if (loadMoreLoadingKeys.has(lmKey)) {
+      return;
+    }
+    setLoadMoreLoadingKeys((prev) => new Set(prev).add(lmKey));
+    try {
+      const nextPage = info.page + 1;
+      const data = await getConnectionList({
+        projectId: info.projectId,
+        page: nextPage,
+        size: info.size,
+      });
+      const contents = data?.contents || [];
+      dsListPageInfoRef.current = { ...info, page: nextPage };
+      const newNodes = contents.map(datasourceToNode);
+      setLazyTreeData((prev) => {
+        const withoutLm = prev.filter((n) => n.key !== lmKey);
+        const merged = [...withoutLm, ...newNodes];
+        if (nextPage < info.totalPages) {
+          merged.push(makeLoadMoreNode(lmKey));
+        }
+        return merged;
+      });
+    } catch (e) {
+      // ignore
+    } finally {
+      setLoadMoreLoadingKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(lmKey);
+        return next;
+      });
+    }
+  }, [loadMoreLoadingKeys]);
+
+  const lazyLoadMoreDatasourceDatabases = useCallback(
+    async (datasourceId: number) => {
+      const info = dsDbPageInfoRef.current.get(datasourceId);
+      if (!info) {
+        return;
+      }
+      const lmKey = LM_DS_PREFIX + datasourceId;
+      if (loadMoreLoadingKeys.has(lmKey)) {
+        return;
+      }
+      setLoadMoreLoadingKeys((prev) => new Set(prev).add(lmKey));
+      try {
+        const nextPage = info.page + 1;
+        const res = await listDatabases(
+          null,
+          datasourceId,
+          nextPage,
+          info.size,
+          null,
+          null,
+          null,
+          true,
+          true,
+        );
+        const dbs = (res?.contents || []).filter((db) => db.existed);
+        dsDbPageInfoRef.current.set(datasourceId, { ...info, page: nextPage });
+        const newChildren = buildDbChildNodes(dbs);
+        const dsKey = `ds-${datasourceId}`;
+        setLazyTreeData((prev) => {
+          const hasDsNode = prev.some((n) => n.key === dsKey);
+          if (hasDsNode) {
+            return prev.map((n) => {
+              if (n.key !== dsKey) {
+                return n;
+              }
+              const existing = ((n.children || []) as TreeDataNode[]).filter(
+                (c) => c.key !== lmKey,
+              );
+              const merged: TreeDataNode[] = [...existing, ...newChildren];
+              if (nextPage < info.totalPages) {
+                merged.push(makeLoadMoreNode(lmKey));
+              }
+              return { ...n, children: merged };
+            });
+          }
+          const withoutLm = prev.filter((n) => n.key !== lmKey);
+          const merged: TreeDataNode[] = [...withoutLm, ...newChildren];
+          if (nextPage < info.totalPages) {
+            merged.push(makeLoadMoreNode(lmKey));
+          }
+          return merged;
+        });
+      } catch (e) {
+        // ignore
+      } finally {
+        setLoadMoreLoadingKeys((prev) => {
+          const next = new Set(prev);
+          next.delete(lmKey);
+          return next;
+        });
+      }
+    },
+    [loadMoreLoadingKeys],
+  );
+
+  const lazyHandleLoadMore = useCallback(
+    (key: string) => {
+      if (key.startsWith(LM_PROJECT_PREFIX)) {
+        lazyLoadMoreProjectDatasources();
+      } else if (key.startsWith(LM_DS_PREFIX)) {
+        const dsId = Number(key.replace(LM_DS_PREFIX, ''));
+        if (!Number.isNaN(dsId)) {
+          lazyLoadMoreDatasourceDatabases(dsId);
+        }
+      }
+    },
+    [lazyLoadMoreProjectDatasources, lazyLoadMoreDatasourceDatabases],
+  );
+
+  /**
+   * 进入项目/数据源时拉首页。
+   */
+  useEffect(() => {
+    if (!lazy) {
+      return;
+    }
+    setLazyTreeData([]);
+    if (databaseFrom === 'project' && lazyProjectId) {
+      lazyLoadProjectDatasources(lazyProjectId);
+    } else if (databaseFrom === 'datasource' && lazyDatasourceId) {
+      lazyLoadDatasourceDatabases(lazyDatasourceId, 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lazy, databaseFrom, lazyProjectId, lazyDatasourceId]);
+
+  const lazyReload = useCallback(() => {
+    if (databaseFrom === 'project' && lazyProjectId) {
+      return lazyLoadProjectDatasources(lazyProjectId);
+    } else if (databaseFrom === 'datasource' && lazyDatasourceId) {
+      return lazyLoadDatasourceDatabases(lazyDatasourceId, 1);
+    }
+  }, [
+    databaseFrom,
+    lazyProjectId,
+    lazyDatasourceId,
+    lazyLoadProjectDatasources,
+    lazyLoadDatasourceDatabases,
+  ]);
+
   const treeData: TreeDataNode[] = (() => {
+    if (lazy) {
+      /**
+       * 懒加载模式：直接用 lazyTreeData。内联搜索仅过滤"已加载"节点（降级，Ctrl+J 全局搜索走服务端）。
+       */
+      if (searchValue?.type === DbObjectType.database && searchValue?.value) {
+        const kw = searchValue.value.toLowerCase();
+        const filterNodes = (nodes: TreeDataNode[]): TreeDataNode[] =>
+          nodes
+            .map((n) => {
+              if (n.type === ResourceNodeType.LoadMore) {
+                return null;
+              }
+              if (n.type === ResourceNodeType.Datasource) {
+                const children = n.children ? filterNodes(n.children as TreeDataNode[]) : [];
+                if (children.length) {
+                  return { ...n, children };
+                }
+                return null;
+              }
+              const db = n.data as IDatabase;
+              return db?.name?.toLowerCase()?.includes(kw) ? n : null;
+            })
+            .filter(Boolean) as TreeDataNode[];
+        return filterNodes(lazyTreeData);
+      }
+      return lazyTreeData;
+    }
     const filteredDatabases =
       databases?.filter((db) => {
         if (
@@ -204,6 +497,12 @@ const ResourceTree: React.FC<IProps> = function ({
    * "展开后收起再点定位"也能重新展开。
    */
   useEffect(() => {
+    if (lazy) {
+      /**
+       * 懒加载模式由下方专用 effect 处理定位（含未加载时的全量兜底）。
+       */
+      return;
+    }
     const databaseId = treeContext.currentDatabaseId;
     if (!databaseId) {
       return;
@@ -237,13 +536,143 @@ const ResourceTree: React.FC<IProps> = function ({
     }, 0);
   }, [treeContext.currentDatabaseId, treeContext.locateRequestId, treeData]);
 
+  /**
+   * 懒加载模式定位：目标库若已在已加载数据源中，直接展开+滚动；否则用一次全量
+   * listDatabases(projectId) 找到归属数据源，把该数据源库填入并展开（与 SelectPanel/Project
+   * 定位逻辑一致；该全量查询为定位功能性必需，不参与常规分页）。
+   */
+  useEffect(() => {
+    if (!lazy || !treeContext.currentDatabaseId || !lazyTreeData.length) {
+      return;
+    }
+    const databaseId = treeContext.currentDatabaseId;
+    let group = null;
+    for (const node of lazyTreeData) {
+      if (
+        node.type === ResourceNodeType.Datasource &&
+        node.children?.some((c) => c.key === databaseId)
+      ) {
+        group = node;
+        break;
+      }
+    }
+    const existsFlat = lazyTreeData.some((n) => n.key === databaseId);
+    const scrollToSelected = () => {
+      setTimeout(() => {
+        const nodeEl = treeWrapperRef.current?.querySelector?.('.ant-tree-treenode-selected');
+        if (nodeEl && typeof nodeEl.scrollIntoView === 'function') {
+          nodeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      }, 0);
+    };
+    if (group || existsFlat) {
+      if (group) {
+        const keys = [...expandedKeys];
+        if (!keys.includes(group.key)) {
+          setExpandedKeys([...keys, group.key]);
+        }
+      }
+      scrollToSelected();
+      return;
+    }
+    if (databaseFrom !== 'project' || !lazyProjectId) {
+      return;
+    }
+    if (lazyLocateLocatingRef.current === databaseId) {
+      return;
+    }
+    lazyLocateLocatingRef.current = databaseId;
+    (async () => {
+      try {
+        const res = await listDatabases(
+          lazyProjectId,
+          null,
+          1,
+          99999,
+          null,
+          null,
+          null,
+          true,
+          true,
+        );
+        const all = (res?.contents || []).filter((db) => db.existed);
+        const targetDb = all.find((db) => db.id === databaseId);
+        const targetDsId = targetDb?.dataSource?.id;
+        if (targetDsId == null) {
+          return;
+        }
+        const groupByDs = new Map<number, IDatabase[]>();
+        all.forEach((db) => {
+          const dsId = db.dataSource?.id;
+          if (dsId == null) {
+            return;
+          }
+          const arr = groupByDs.get(dsId) || [];
+          arr.push(db);
+          groupByDs.set(dsId, arr);
+        });
+        setLazyTreeData((prev) =>
+          prev.map((n) => {
+            if (n.type !== ResourceNodeType.Datasource || n.children?.length) {
+              return n;
+            }
+            const dsId = (n.data as IDatasource)?.id;
+            const dbs = dsId != null ? groupByDs.get(dsId) : undefined;
+            if (!dbs?.length) {
+              return n;
+            }
+            return { ...n, children: buildDbChildNodes(dbs) };
+          }),
+        );
+        const targetKey = `ds-${targetDsId}`;
+        const cur = [...expandedKeys];
+        if (!cur.includes(targetKey)) {
+          setExpandedKeys([...cur, targetKey]);
+        }
+        scrollToSelected();
+      } catch (e) {
+        // ignore
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lazy, treeContext.currentDatabaseId, treeContext.locateRequestId, lazyTreeData]);
+
   const loadData = useCallback(
     async (treeNode: EventDataNode<any> & TreeDataNode) => {
-      const { type, data } = treeNode;
+      const { type, data, key } = treeNode;
       switch (type) {
         case ResourceNodeType.Datasource: {
+          if (lazy) {
+            /**
+             * 懒加载：展开数据源时按页拉取其下库，挂为子节点（含"加载更多"哨兵）。
+             */
+            const datasourceId = (data as IDatasource)?.id;
+            const res = await listDatabases(
+              null,
+              datasourceId,
+              1,
+              DS_DB_PAGE_SIZE,
+              null,
+              null,
+              null,
+              true,
+              true,
+            );
+            const dbs = (res?.contents || []).filter((db) => db.existed);
+            const totalPages = res?.page?.totalPages ?? (res?.contents?.length ? 1 : 0);
+            dsDbPageInfoRef.current.set(datasourceId, {
+              page: 1,
+              size: DS_DB_PAGE_SIZE,
+              totalPages,
+            });
+            const children: TreeDataNode[] = buildDbChildNodes(dbs);
+            if (1 < totalPages) {
+              children.push(makeLoadMoreNode(LM_DS_PREFIX + datasourceId));
+            }
+            setLazyTreeData((prev) => prev.map((n) => (n.key === key ? { ...n, children } : n)));
+          }
           /**
-           * 项目模式下数据源节点由已拉取的数据库列表分组而来，无需懒加载。
+           * 非懒加载：项目模式下数据源节点由已拉取的数据库列表分组而来，无需懒加载。
            */
           break;
         }
@@ -266,12 +695,35 @@ const ResourceTree: React.FC<IProps> = function ({
         }
       }
     },
-    [sessionIds],
+    [sessionIds, lazy],
   );
 
   const renderNode = useCallback(
     (node: TreeDataNode): React.ReactNode => {
-      const { type, sessionId, key, dbObjectType } = node;
+      const { type, sessionId, key } = node;
+      if (type === ResourceNodeType.LoadMore) {
+        const lmKey = String(key);
+        const loading = loadMoreLoadingKeys.has(lmKey);
+        return (
+          <span
+            className={styles.loadMore}
+            onClick={(e) => {
+              e.stopPropagation();
+              lazyHandleLoadMore(lmKey);
+            }}
+          >
+            {loading
+              ? formatMessage({
+                  id: 'odc.ResourceTree.Loading',
+                  defaultMessage: '加载中...',
+                })
+              : formatMessage({
+                  id: 'odc.ResourceTree.LoadMore',
+                  defaultMessage: '加载更多',
+                })}
+          </span>
+        );
+      }
       const dbSession = sessionManagerStore.sessionMap.get(sessionId);
 
       return (
@@ -285,8 +737,31 @@ const ResourceTree: React.FC<IProps> = function ({
         />
       );
     },
-    [sessionIds],
+    [sessionIds, loadMoreLoadingKeys, lazyHandleLoadMore],
   );
+
+  /**
+   * 懒加载模式下，已加载到树中的库（供 SyncMetadata 聚合同步状态用；降级——仅含已展开
+   * 数据源下的库，未展开的不参与，用户已知悉）。
+   */
+  const loadedDatabases = useMemo(() => {
+    if (!lazy) {
+      return databases || [];
+    }
+    const result: IDatabase[] = [];
+    const walk = (nodes: TreeDataNode[]) => {
+      nodes.forEach((n) => {
+        if (n.type === ResourceNodeType.Database && n.data) {
+          result.push(n.data as IDatabase);
+        }
+        if (n.children?.length) {
+          walk(n.children as TreeDataNode[]);
+        }
+      });
+    };
+    walk(lazyTreeData);
+    return result;
+  }, [lazy, lazyTreeData, databases]);
 
   return (
     <div className={styles.resourceTree}>
@@ -303,46 +778,46 @@ const ResourceTree: React.FC<IProps> = function ({
             </Space>
           )}
           <span className={styles.titleAction}>
-          <Space size={8} style={{ lineHeight: 1.5 }}>
-            {enableFilter ? (
-              <DatasourceFilter
-                key="ResourceTreeDatasourceFilter"
-                envs={envs}
-                types={connectTypes}
-                onClear={() => {
-                  setEnvs([]);
-                  setConnectTypes([]);
+            <Space size={8} style={{ lineHeight: 1.5 }}>
+              {enableFilter ? (
+                <DatasourceFilter
+                  key="ResourceTreeDatasourceFilter"
+                  envs={envs}
+                  types={connectTypes}
+                  onClear={() => {
+                    setEnvs([]);
+                    setConnectTypes([]);
+                  }}
+                  onEnvsChange={(v) => {
+                    setEnvs(v);
+                  }}
+                  onTypesChange={(v) => {
+                    setConnectTypes(v);
+                  }}
+                />
+              ) : null}
+              {settingStore.configurations['odc.database.default.enableGlobalObjectSearch'] ===
+              'true' ? (
+                <SyncMetadata
+                  resourceType={
+                    databaseFrom === 'project'
+                      ? IManagerResourceType.project
+                      : IManagerResourceType.resource
+                  }
+                  resourceId={Number(stateId?.split('-')?.[1])}
+                  reloadDatabase={lazy ? lazyReload : reloadDatabase}
+                  databaseList={loadedDatabases}
+                />
+              ) : null}
+              <Reload
+                key="ResourceTreeReload"
+                onClick={() => {
+                  return lazy ? lazyReload() : reloadDatabase();
                 }}
-                onEnvsChange={(v) => {
-                  setEnvs(v);
-                }}
-                onTypesChange={(v) => {
-                  setConnectTypes(v);
-                }}
+                style={{ display: 'flex' }}
               />
-            ) : null}
-            {settingStore.configurations['odc.database.default.enableGlobalObjectSearch'] ===
-            'true' ? (
-              <SyncMetadata
-                resourceType={
-                  databaseFrom === 'project'
-                    ? IManagerResourceType.project
-                    : IManagerResourceType.resource
-                }
-                resourceId={Number(stateId?.split('-')?.[1])}
-                reloadDatabase={reloadDatabase}
-                databaseList={databases}
-              />
-            ) : null}
-            <Reload
-              key="ResourceTreeReload"
-              onClick={() => {
-                return reloadDatabase();
-              }}
-              style={{ display: 'flex' }}
-            />
-          </Space>
-        </span>
+            </Space>
+          </span>
         </div>
       )}
       <div className={styles.search}>

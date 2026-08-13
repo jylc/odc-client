@@ -1,17 +1,24 @@
 import { formatMessage } from '@/util/intl';
-import { Button } from 'antd';
+import { Button, Spin } from 'antd';
 import styles from '../index.less';
 import DataBaseStatusIcon from '@/component/StatusIcon/DatabaseIcon';
 import ResourceTreeContext from '@/page/Workspace/context/ResourceTreeContext';
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { IDatabase, IDatabaseObject } from '@/d.ts/database';
 import { ModalStore } from '@/store/modal';
 import { openNewSQLPage } from '@/store/helper/page';
+import { listDatabases } from '@/common/network/database';
+import { useDebounceFn } from 'ahooks';
+
+/**
+ * 全局数据库搜索（Ctrl+J）每页拉取条数。改为服务端按 name 搜索 + 分页，不再依赖内存全量
+ * databaseList。
+ */
+const SEARCH_PAGE_SIZE = 50;
 
 interface Iprops {
   database: IDatabase;
   setDatabase: React.Dispatch<React.SetStateAction<IDatabase>>;
-  databaseList: IDatabase[];
   objectlist: IDatabaseObject;
   setSelectDatabaseState: React.Dispatch<React.SetStateAction<boolean>>;
   searchKey: string;
@@ -24,7 +31,6 @@ interface Iprops {
 const DatabaseList = ({
   database,
   setDatabase,
-  databaseList,
   setSelectDatabaseState,
   searchKey,
   setSearchKey,
@@ -33,18 +39,66 @@ const DatabaseList = ({
   modalStore,
   objectlist,
 }: Iprops) => {
-  const { selectProjectId } = useContext(ResourceTreeContext);
+  const { selectProjectId, selectDatasourceId } = useContext(ResourceTreeContext);
   const [activeDatabase, setActiveDatabase] = useState<IDatabase>();
+  const [options, setOptions] = useState<IDatabase[]>([]);
+  const [pageInfo, setPageInfo] = useState<{ page: number; totalPages: number }>({
+    page: 1,
+    totalPages: 1,
+  });
+  const [loading, setLoading] = useState(false);
+  const reqIdRef = useRef(0);
 
-  const getOptions = () => {
-    if (objectlist) {
-      return objectlist.databases;
+  const fetchPage = async (page: number, name: string, replace: boolean) => {
+    setLoading(true);
+    const myId = ++reqIdRef.current;
+    try {
+      const res = await listDatabases(
+        selectProjectId,
+        selectDatasourceId,
+        page,
+        SEARCH_PAGE_SIZE,
+        name || null,
+        null,
+        null,
+        true,
+        true,
+      );
+      if (myId !== reqIdRef.current) {
+        return;
+      }
+      const contents = res?.contents || [];
+      const totalPages = res?.page?.totalPages ?? (contents.length ? 1 : 0);
+      setPageInfo({ page, totalPages });
+      setOptions((prev) => (replace ? contents : [...prev, ...contents]));
+    } finally {
+      if (myId === reqIdRef.current) {
+        setLoading(false);
+      }
     }
-    return [...databaseList].filter((i) =>
-      i?.name?.toLowerCase().includes(searchKey?.toLowerCase() || ''),
-    );
   };
-  const options = getOptions();
+
+  const { run: debouncedSearch } = useDebounceFn((name: string) => fetchPage(1, name, true), {
+    wait: 300,
+  });
+
+  useEffect(() => {
+    debouncedSearch(searchKey);
+  }, [searchKey, debouncedSearch]);
+
+  const loadMore = () => {
+    if (pageInfo.page < pageInfo.totalPages) {
+      fetchPage(pageInfo.page + 1, searchKey, false);
+    }
+  };
+
+  const getOptions = (): IDatabase[] => {
+    if (objectlist) {
+      return objectlist.databases || [];
+    }
+    return options;
+  };
+  const listOptions = getOptions();
 
   const changeDatabase = (item) => {
     setDatabase(item);
@@ -109,39 +163,49 @@ const DatabaseList = ({
           defaultMessage: '全部数据库',
         })}
       </div>
-      {options?.length
-        ? options.map((db) => {
-            return (
-              <>
-                <div
-                  key={db.id}
-                  onClick={() => changeDatabase(db)}
-                  className={
-                    database?.id === db?.id ? styles.databaseItemActive : styles.databaseItem
-                  }
-                  onMouseEnter={() => setActiveDatabase(db)}
-                  onMouseLeave={() => setActiveDatabase(null)}
-                >
+      <Spin spinning={loading}>
+        {listOptions?.length
+          ? listOptions.map((db) => {
+              return (
+                <>
                   <div
-                    style={{
-                      display: 'flex',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      maxWidth: 410,
-                    }}
+                    key={db.id}
+                    onClick={() => changeDatabase(db)}
+                    className={
+                      database?.id === db?.id ? styles.databaseItemActive : styles.databaseItem
+                    }
+                    onMouseEnter={() => setActiveDatabase(db)}
+                    onMouseLeave={() => setActiveDatabase(null)}
                   >
-                    <DataBaseStatusIcon item={db} />
-                    <div style={{ padding: '0 4px' }}>{db?.name}</div>
-                    <div className={styles.subInfo}>
-                      {selectProjectId ? db?.dataSource?.name : null}
+                    <div
+                      style={{
+                        display: 'flex',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: 410,
+                      }}
+                    >
+                      <DataBaseStatusIcon item={db} />
+                      <div style={{ padding: '0 4px' }}>{db?.name}</div>
+                      <div className={styles.subInfo}>
+                        {selectProjectId ? db?.dataSource?.name : null}
+                      </div>
                     </div>
+                    {getPositioninButton(db)}
                   </div>
-                  {getPositioninButton(db)}
-                </div>
-              </>
-            );
-          })
-        : null}
+                </>
+              );
+            })
+          : null}
+        {!objectlist && pageInfo.page < pageInfo.totalPages ? (
+          <div className={styles.loadMore} onClick={loadMore}>
+            {formatMessage({
+              id: 'odc.ResourceTree.LoadMore',
+              defaultMessage: '加载更多',
+            })}
+          </div>
+        ) : null}
+      </Spin>
     </div>
   );
 };

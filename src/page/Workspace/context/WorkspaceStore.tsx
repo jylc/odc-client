@@ -27,9 +27,6 @@ import { getDataSourceGroupByProject } from '@/common/network/connection';
 import { useParams } from '@umijs/max';
 import { toInteger } from 'lodash';
 import datasourceStatus from '@/store/datasourceStatus';
-import { listDatabases } from '@/common/network/database';
-import { IDatabase } from '@/d.ts/database';
-import { DBObjectSyncStatus } from '@/d.ts/database';
 
 export default function WorkspaceStore({ children }) {
   const [activityBarKey, setActivityBarKey] = useState(ActivityBarItemType.Database);
@@ -56,7 +53,6 @@ export default function WorkspaceStore({ children }) {
    * 由 SelectPanel/Project 本地拉取当前页，不再在 context 维护全量 projectList。
    */
   const [selectProject, setSelectProject] = useState<IProject>(null);
-  const [databaseList, setDatabaseList] = useState<IDatabase[]>([]);
   /**
    * 从项目页"登录数据库"进入时设置，作为一次性信号通知 SelectPanel 自动进入该项目并
    * 保持 SelectPanel 打开（显示带返回箭头的项目内数据源视图）。进入后由 Project 组件清空。
@@ -79,50 +75,18 @@ export default function WorkspaceStore({ children }) {
     manual: true,
   });
 
-  const { run: fetchDatabases, loading: dbLoading } = useRequest(listDatabases, {
-    manual: true,
-  });
-
   const reloadDatasourceList = useCallback(async () => {
     const data = await fetchDatasource();
     setDatasourceList(data?.contents || []);
     datasourceStatus.asyncUpdateStatus(data?.contents?.map((a) => a.id));
   }, []);
 
-  const reloadDatabaseList = useCallback(async () => {
-    if (selectProjectId || selectDatasourceId) {
-      const data = await fetchDatabases(
-        selectProjectId,
-        selectDatasourceId,
-        1,
-        99999,
-        null,
-        null,
-        null,
-        true,
-        true,
-      );
-      setDatabaseList(data?.contents || []);
-      return data?.contents;
-    }
-  }, [selectProjectId, selectDatasourceId]);
-
-  const { run: pollingDatabase, cancel } = useRequest(
-    async () => {
-      const databaseList = await reloadDatabaseList();
-      if (
-        !databaseList?.find((item) =>
-          [DBObjectSyncStatus.SYNCING, DBObjectSyncStatus.PENDING].includes(item.objectSyncStatus),
-        )
-      ) {
-        cancel();
-      }
-    },
-    {
-      pollingInterval: 3000,
-      pollingWhenHidden: false,
-    },
-  );
+  /**
+   * 主资源树已改为按数据源懒加载分页，不再在 context 维护全量 databaseList。原 pollingDatabase
+   * 依赖全量列表扫描同步状态，现已无全量列表可扫；保留为占位（TreeNodeMenu 同步后仍会调用），
+   * 实际同步状态展示由各树内 SyncMetadata 按已加载库聚合（降级，用户已知悉）。
+   */
+  const pollingDatabase = useCallback(() => {}, []);
 
   return (
     <ResourceTreeContext.Provider
@@ -141,8 +105,6 @@ export default function WorkspaceStore({ children }) {
         setCurrentDatabaseId,
         locateRequestId,
         setLocateRequestId,
-        databaseList,
-        reloadDatabaseList,
         pollingDatabase,
         autoEnterProjectId,
         setAutoEnterProjectId,

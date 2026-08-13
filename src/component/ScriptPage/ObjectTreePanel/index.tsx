@@ -98,14 +98,12 @@ const ObjectTreePanel: React.FC<IProps> = function ({ session, pollingDatabase, 
           selectProjectId: null,
           selectDatasourceId: null,
           datasourceList: [],
-          databaseList: [odcDatabase],
           /**
            * 编辑器内对象树不需要联动侧边栏的当前数据库高亮，这里给空实现避免
            * useTreeState/onExpand 调用时报错（context 默认值缺少该字段）。
            */
           setCurrentDatabaseId: () => {},
           currentDatabaseId: dbId,
-          reloadDatabaseList: () => Promise.resolve(),
           pollingDatabase,
         }}
       >

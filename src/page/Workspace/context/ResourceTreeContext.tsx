@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import { IDatabase } from '@/d.ts/database';
 import { IDatasource } from '@/d.ts/datasource';
 import { IProject } from '@/d.ts/project';
 import React from 'react';
@@ -48,8 +47,10 @@ interface IResourceTreeContext {
    */
   locateRequestId?: number;
   setLocateRequestId?: (v: number) => void;
-  databaseList: IDatabase[];
-  reloadDatabaseList?: () => void;
+  /**
+   * 主资源树已改为按数据源懒加载分页，不再在 context 维护全量 databaseList/reloadDatabaseList。
+   * 各树自行按页拉取；同步状态由 SyncMetadata 按已加载库聚合（降级）。
+   */
   pollingDatabase?: () => void;
   /**
    * 一次性信号：从项目页"登录数据库"进入 SQL 窗口时设置，通知 SelectPanel 的 Project
@@ -73,6 +74,5 @@ const ResourceTreeContext = React.createContext<IResourceTreeContext>({
   selectDatasourceId: null,
   datasourceList: [],
   selectProject: null,
-  databaseList: [],
 });
 export default ResourceTreeContext;

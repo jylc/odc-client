@@ -25,7 +25,7 @@ const DatabaseSearchModal = ({ modalStore }: IProps) => {
   const [activeKey, setActiveKey] = useState(SEARCH_OBJECT_FROM_ALL_DATABASE);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const { selectDatasourceId, selectProjectId, databaseList } = useContext(ResourceTreeContext);
+  const { selectDatasourceId, selectProjectId } = useContext(ResourceTreeContext);
 
   const handleCancel = () => {
     modalStore.changeDatabaseSearchModalVisible(false);
@@ -83,7 +83,6 @@ const DatabaseSearchModal = ({ modalStore }: IProps) => {
         <DatabaseList
           database={database}
           setDatabase={setDatabase}
-          databaseList={databaseList}
           setSelectDatabaseState={setSelectDatabaseState}
           searchKey={searchKey}
           setSearchKey={setSearchKey}

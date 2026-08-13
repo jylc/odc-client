@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 
-import { getConnectionList } from '@/common/network/connection';
 import { formatMessage } from '@/util/intl';
-import { useRequest } from 'ahooks';
-import { Form, Modal, Select } from 'antd';
+import { Form, Modal } from 'antd';
 import SessionSelect from '@/page/Workspace/components/SessionContextWrap/SessionSelect/SelectItem';
 import { inject, observer } from 'mobx-react';
 import { ModalStore } from '@/store/modal';
@@ -31,15 +29,6 @@ function SelectModal({ modalStore }: IProps) {
     form.resetFields();
     modalStore.changeSelectDatabaseVisible(false);
   };
-  const { data, loading } = useRequest(getConnectionList, {
-    defaultParams: [
-      {
-        page: 1,
-        size: 9999,
-        minPrivilege: 'update',
-      },
-    ],
-  });
   const [form] = Form.useForm<{ dataSourceId: number }>();
 
   return (

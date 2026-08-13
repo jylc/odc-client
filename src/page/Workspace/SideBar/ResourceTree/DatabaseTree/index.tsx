@@ -14,53 +14,32 @@
  * limitations under the License.
  */
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext } from 'react';
 import ResourceTree from '..';
 import ResourceTreeContext from '@/page/Workspace/context/ResourceTreeContext';
-import { useRequest } from 'ahooks';
-import { listDatabases } from '@/common/network/database';
 import TreeTitle from './Title';
-import datasourceStatus from '@/store/datasourceStatus';
-import { IDatabase } from '@/d.ts/database';
 
 interface IProps {
   openSelectPanel?: () => void;
 }
 
+/**
+ * 选中项目/数据源后显示的主资源树。
+ *
+ * 已改为懒加载：传入 `lazy`，由 ResourceTree 内部先分页拉数据源、展开数据源再分页懒加载库
+ * （数据源模式则直接分页懒加载该数据源库），不再走"一次性全量 listDatabases(99999) 再分组"。
+ * 故此处不再消费 context.databaseList / reloadDatabaseList。
+ */
 const DatabaseTree: React.FC<IProps> = function ({ openSelectPanel }) {
   const {
     selectDatasourceId,
     selectProjectId,
     selectProject,
     datasourceList,
-    databaseList,
-    reloadDatabaseList,
     setCurrentDatabaseId,
     pollingDatabase,
   } = useContext(ResourceTreeContext);
-  const [databases, setDatabases] = useState<IDatabase[]>([]);
   const selectDatasource = datasourceList?.find((d) => d.id == selectDatasourceId);
-
-  async function reloadDatabase() {
-    await reloadDatabaseList();
-  }
-
-  useEffect(() => {
-    if (selectDatasourceId || selectProjectId) {
-      reloadDatabase();
-    }
-  }, [selectDatasourceId, selectProjectId]);
-
-  useEffect(() => {
-    if (databaseList.length) {
-      setDatabases(databaseList?.filter((item) => !!item?.authorizedPermissionTypes?.length));
-      const ids: Set<number> = new Set();
-      databaseList.forEach((d) => {
-        ids.add(d.dataSource?.id);
-      });
-      datasourceStatus.asyncUpdateStatus(Array.from(ids));
-    }
-  }, [databaseList]);
 
   function onTitleClick() {
     openSelectPanel();
@@ -70,11 +49,11 @@ const DatabaseTree: React.FC<IProps> = function ({ openSelectPanel }) {
   function ProjectRender() {
     return (
       <ResourceTree
+        lazy
         stateId={'project-' + selectProjectId}
-        reloadDatabase={() => reloadDatabase()}
+        reloadDatabase={() => Promise.resolve()}
         databaseFrom={'project'}
         title={<TreeTitle project={selectProject} />}
-        databases={databases}
         onTitleClick={onTitleClick}
         enableFilter
         showTip
@@ -85,11 +64,11 @@ const DatabaseTree: React.FC<IProps> = function ({ openSelectPanel }) {
   function DatasourceRender() {
     return (
       <ResourceTree
+        lazy
         stateId={'datasource-' + selectDatasourceId}
-        reloadDatabase={() => reloadDatabase()}
+        reloadDatabase={() => Promise.resolve()}
         databaseFrom={'datasource'}
         title={<TreeTitle datasource={selectDatasource} />}
-        databases={databases}
         onTitleClick={onTitleClick}
         pollingDatabase={pollingDatabase}
       />
