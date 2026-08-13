@@ -49,7 +49,9 @@ export default inject(
 
     async function initData() {
       await resourcetreeContext.reloadDatasourceList();
-      await resourcetreeContext.reloadProjectList();
+      /**
+       * 项目列表已改为服务端分页，由 SelectPanel/Project 挂载时按页拉取，不再在此全量加载。
+       */
       setLoading(false);
     }
 

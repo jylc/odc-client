@@ -24,7 +24,6 @@ import { IProject } from '@/d.ts/project';
 import login from '@/store/login';
 import { useRequest } from 'ahooks';
 import { getDataSourceGroupByProject } from '@/common/network/connection';
-import { listProjects } from '@/common/network/project';
 import { useParams } from '@umijs/max';
 import { toInteger } from 'lodash';
 import datasourceStatus from '@/store/datasourceStatus';
@@ -52,7 +51,11 @@ export default function WorkspaceStore({ children }) {
     datasourceId ? toInteger(datasourceId) : null,
   );
   const [datasourceList, setDatasourceList] = useState<IDatasource[]>([]);
-  const [projectList, setProjectList] = useState<IProject[]>([]);
+  /**
+   * 当前已进入的项目对象（display-only，仅用于展示项目名）。项目列表已改为服务端分页，
+   * 由 SelectPanel/Project 本地拉取当前页，不再在 context 维护全量 projectList。
+   */
+  const [selectProject, setSelectProject] = useState<IProject>(null);
   const [databaseList, setDatabaseList] = useState<IDatabase[]>([]);
   /**
    * 从项目页"登录数据库"进入时设置，作为一次性信号通知 SelectPanel 自动进入该项目并
@@ -75,10 +78,6 @@ export default function WorkspaceStore({ children }) {
     defaultParams: [login.isPrivateSpace()],
     manual: true,
   });
-  const { loading: projLoading, run: fetchProject } = useRequest(listProjects, {
-    defaultParams: [null, 1, 9999, false],
-    manual: true,
-  });
 
   const { run: fetchDatabases, loading: dbLoading } = useRequest(listDatabases, {
     manual: true,
@@ -88,11 +87,6 @@ export default function WorkspaceStore({ children }) {
     const data = await fetchDatasource();
     setDatasourceList(data?.contents || []);
     datasourceStatus.asyncUpdateStatus(data?.contents?.map((a) => a.id));
-  }, []);
-
-  const reloadProjectList = useCallback(async () => {
-    const data = await fetchProject(null, 1, 99999, false);
-    setProjectList(data?.contents || []);
   }, []);
 
   const reloadDatabaseList = useCallback(async () => {
@@ -141,8 +135,8 @@ export default function WorkspaceStore({ children }) {
         setSelectProjectId,
         datasourceList,
         reloadDatasourceList,
-        projectList,
-        reloadProjectList,
+        selectProject,
+        setSelectProject,
         currentDatabaseId,
         setCurrentDatabaseId,
         locateRequestId,

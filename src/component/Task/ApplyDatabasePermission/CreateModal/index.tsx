@@ -150,6 +150,13 @@ const CreateModal: React.FC<IProps> = (props) => {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const { run: getProjects, data: projects } = useRequest(listProjects, {
     defaultParams: [null, null, null],
+    /**
+     * 该弹窗在工作台常驻挂载（可见性由 modalStore.applyDatabasePermissionVisible 控制）。
+     * 若不加 manual，useRequest 会在挂载时自动跑一次 listProjects(null,null,null)，
+     * 导致每次进入 sqlworkspace 都多发一次项目列表请求。改为 manual 后只在下方
+     * applyDatabasePermissionVisible 变 true（弹窗打开）时按需拉取。
+     */
+    manual: true,
   });
   const projectOptions = projects?.contents?.map(({ name, id }) => ({
     label: name,

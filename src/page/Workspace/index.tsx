@@ -92,11 +92,15 @@ const Workspace: React.FC<WorkspaceProps> = (props: WorkspaceProps) => {
        * SelectPanel 打开；设置 currentDatabaseId 让 Project 树自动定位/高亮目标数据库。
        * Container 的 effect 在 autoEnterProjectId 存在时不会因 currentDatabaseId 关闭面板。
        *
-       * 仅在"再次带参进入"（非首次挂载，首次由 Container.initData 加载）时刷新项目/数据源
-       * 列表；项目内数据源由 autoEnterProjectId → enterProject → loadProjectDatasources 刷新。
+       * 仅在"再次带参进入"（非首次挂载）时刷新数据源目录；项目列表为服务端分页，由
+       * SelectPanel/Project 的 autoEnter effect 刷新；项目内数据源由 autoEnterProjectId →
+       * enterProject → loadProjectDatasources 刷新。
        */
       if (!isFirstResolve) {
-        resourceTreeContext?.reloadProjectList?.();
+        /**
+         * 项目列表已改为服务端分页本地拉取：刷新由 SelectPanel/Project 的 autoEnter effect
+         * 接管（fetchProjects + getProject），此处仅刷新数据源目录。
+         */
         resourceTreeContext?.reloadDatasourceList?.();
       }
       resourceTreeContext?.setSelectTabKey(ResourceTreeTab.project);

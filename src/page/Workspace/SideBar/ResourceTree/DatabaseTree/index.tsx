@@ -31,7 +31,7 @@ const DatabaseTree: React.FC<IProps> = function ({ openSelectPanel }) {
   const {
     selectDatasourceId,
     selectProjectId,
-    projectList,
+    selectProject,
     datasourceList,
     databaseList,
     reloadDatabaseList,
@@ -39,7 +39,6 @@ const DatabaseTree: React.FC<IProps> = function ({ openSelectPanel }) {
     pollingDatabase,
   } = useContext(ResourceTreeContext);
   const [databases, setDatabases] = useState<IDatabase[]>([]);
-  const selectProject = projectList?.find((p) => p.id == selectProjectId);
   const selectDatasource = datasourceList?.find((d) => d.id == selectDatasourceId);
 
   async function reloadDatabase() {

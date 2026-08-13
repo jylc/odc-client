@@ -16,7 +16,9 @@
 
 import ResourceTreeContext, { ResourceTreeTab } from '@/page/Workspace/context/ResourceTreeContext';
 import ResourceTree from '@/page/Workspace/SideBar/ResourceTree';
-import TreeStateStore, { ITreeStateCache } from '@/page/Workspace/SideBar/ResourceTree/TreeStateStore';
+import TreeStateStore, {
+  ITreeStateCache,
+} from '@/page/Workspace/SideBar/ResourceTree/TreeStateStore';
 import SessionStore from '@/store/sessionManager/session';
 import { Space } from 'antd';
 import React, { useEffect, useMemo, useRef } from 'react';
@@ -96,7 +98,6 @@ const ObjectTreePanel: React.FC<IProps> = function ({ session, pollingDatabase, 
           selectProjectId: null,
           selectDatasourceId: null,
           datasourceList: [],
-          projectList: [],
           databaseList: [odcDatabase],
           /**
            * 编辑器内对象树不需要联动侧边栏的当前数据库高亮，这里给空实现避免

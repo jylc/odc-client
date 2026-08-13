@@ -32,8 +32,13 @@ interface IResourceTreeContext {
   setSelectDatasourceId?: (v: number) => void;
   datasourceList: IDatasource[];
   reloadDatasourceList?: () => void;
-  projectList: IProject[];
-  reloadProjectList?: () => void;
+  /**
+   * 当前已进入的项目对象（仅用于展示项目名，display-only，不影响 selectProjectId / 面板开合）。
+   * 项目列表已改为服务端分页本地拉取，不再在 context 维护全量 projectList，因此需要进入
+   * 项目时由调用方把项目对象传入，供 DatabaseTree 标题、DatabaseSearchModal 等展示项目名。
+   */
+  selectProject?: IProject;
+  setSelectProject?: (v: IProject | null) => void;
   currentDatabaseId?: number;
   setCurrentDatabaseId?: (v: number) => void;
   /**
@@ -67,7 +72,7 @@ const ResourceTreeContext = React.createContext<IResourceTreeContext>({
   selectProjectId: null,
   selectDatasourceId: null,
   datasourceList: [],
-  projectList: [],
+  selectProject: null,
   databaseList: [],
 });
 export default ResourceTreeContext;

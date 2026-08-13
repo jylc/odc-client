@@ -16,6 +16,7 @@
 
 import { listDatabases } from '@/common/network/database';
 import { deleteConnection, getConnectionList } from '@/common/network/connection';
+import { getProject, listProjects } from '@/common/network/project';
 import Action from '@/component/Action';
 import ConnectionPopover from '@/component/ConnectionPopover';
 import StatusIcon from '@/component/StatusIcon/DataSourceIcon';
@@ -46,6 +47,7 @@ import {
   Input,
   message,
   Modal,
+  Pagination,
   Popover,
   Spin,
   Tree,
@@ -54,12 +56,55 @@ import {
 import classNames from 'classnames';
 import { EventDataNode } from 'antd/lib/tree';
 import { inject, observer } from 'mobx-react';
-import { forwardRef, useContext, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useContext,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import ResourceLayout from '../../Layout';
 import styles from './index.less';
 import { ReactComponent as ProjectSvg } from '@/svgr/project_space.svg';
 
 type View = 'projectList' | 'datasourceList';
+
+/**
+ * 嵌套树分批加载的每页条数与"加载更多"哨兵节点 key 前缀。
+ * - 项目内数据源列表：每页 50；
+ * - 数据源下库列表：每页 100；
+ * 哨兵节点 isLeaf=true，不会被 rc-tree 的 loadData 触发，仅通过 titleRender 点击拉取下一页。
+ */
+const PROJECT_DS_PAGE_SIZE = 50;
+const DS_DB_PAGE_SIZE = 100;
+const LM_PROJECT_PREFIX = 'lm-project-';
+const LM_DS_PREFIX = 'lm-ds-';
+
+function makeLoadMoreNode(key: string): ResourceTreeDataNode {
+  return {
+    key,
+    title: formatMessage({
+      id: 'odc.ResourceTree.LoadMore',
+      defaultMessage: '加载更多',
+    }),
+    type: ResourceNodeType.LoadMore,
+    isLeaf: true,
+    selectable: false,
+  };
+}
+
+function datasourceToNode(item: IDatasource): ResourceTreeDataNode {
+  return {
+    title: item.name,
+    key: `ds-${item.id}`,
+    icon: <StatusIcon item={item} />,
+    isLeaf: false,
+    type: ResourceNodeType.Datasource,
+    data: item,
+  };
+}
 
 interface IProps {
   closeSelectPanel: () => void;
@@ -113,14 +158,13 @@ export default inject(
       const context = useContext(ResourceTreeContext);
       const { cache: treeStateStoreCache } = useContext(TreeStateStore);
       const {
-        projectList,
         autoEnterProjectId,
         setAutoEnterProjectId,
         currentDatabaseId,
         setCurrentDatabaseId,
         locateRequestId,
         autoEnterRequestId,
-        reloadProjectList,
+        setSelectProject,
         reloadDatasourceList,
       } = context;
 
@@ -137,6 +181,39 @@ export default inject(
       const [copyDatasourceId, setCopyDatasourceId] = useState<number>(null);
       const [addDSVisiable, setAddDSVisiable] = useState(false);
 
+      /**
+       * 项目列表改为服务端分页：不再从 context 读取全量 projectList，而是本地按页拉取。
+       * current 为 1-based（与 listProjects 的 page 入参、antd Pagination 的 current 一致）。
+       */
+      const PROJECT_DEFAULT_PAGE_SIZE = 20;
+      const [projPage, setProjPage] = useState<IProject[]>([]);
+      const [projPageInfo, setProjPageInfo] = useState<{
+        current: number;
+        size: number;
+        total: number;
+      }>({ current: 1, size: PROJECT_DEFAULT_PAGE_SIZE, total: 0 });
+      const [projLoading, setProjLoading] = useState(false);
+      async function fetchProjects(
+        current: number = 1,
+        size: number = PROJECT_DEFAULT_PAGE_SIZE,
+        name: string = searchKey,
+      ) {
+        setProjLoading(true);
+        try {
+          const res = await listProjects(name || null, current, size, false);
+          setProjPage(res?.contents || []);
+          setProjPageInfo({
+            current,
+            size,
+            total: res?.page?.totalElements ?? 0,
+          });
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setProjLoading(false);
+        }
+      }
+
       const selectKeys = [context.selectProjectId].filter(Boolean);
 
       /**
@@ -146,6 +223,23 @@ export default inject(
        * 每次渲染 IIFE 重建一致）。
        */
       const [treeData, setTreeData] = useState<ResourceTreeDataNode[]>([]);
+
+      /**
+       * 嵌套树分批加载状态：
+       * - dsListPageInfoRef：当前项目数据源列表已加载到的 (page, totalPages)；
+       * - dsDbPageInfoRef：每个数据源下库列表已加载到的 (page, totalPages)，按 datasourceId 索引；
+       * - loadMoreLoadingKeys：正在加载中的哨兵节点 key 集合，用于渲染 loading 态并防重复点击。
+       */
+      const dsListPageInfoRef = useRef<{
+        projectId: number;
+        page: number;
+        size: number;
+        totalPages: number;
+      }>(null);
+      const dsDbPageInfoRef = useRef<
+        Map<number, { page: number; size: number; totalPages: number }>
+      >(new Map());
+      const [loadMoreLoadingKeys, setLoadMoreLoadingKeys] = useState<Set<string>>(new Set());
 
       /**
        * 每项目独立 stateId，避免两个项目共享数据源/数据库 id 时 expandedKeys/loadedKeys 串。
@@ -172,15 +266,26 @@ export default inject(
        * 避免依赖变化时重复触发"全部刷新"。backToProjectList 时清空，再次进入仍会刷新。
        */
       const autoEnterDoneRef = useRef<{ projectId: number; requestId: number }>(null);
-      const { expandedKeys, loadedKeys, onExpand, onLoad, setExpandedKeys } = useTreeState(stateId, {
-        setCurrentDatabaseOnExpand: false,
-      });
+      const { expandedKeys, loadedKeys, onExpand, onLoad, setExpandedKeys } = useTreeState(
+        stateId,
+        {
+          setCurrentDatabaseOnExpand: false,
+        },
+      );
       /**
        * 镜像 expandedKeys / loadedKeys 到 ref，供定位 effect 读取最新值而不把它们加入
        * 依赖数组（否则用户收起数据源会触发 effect 立即重新展开）。
        */
       expandedKeysRef.current = expandedKeys;
       loadedKeysRef.current = loadedKeys;
+
+      /**
+       * 挂载时拉取项目列表第一页（服务端分页，取代原先的全量 projectList）。
+       */
+      useEffect(() => {
+        fetchProjects(1, PROJECT_DEFAULT_PAGE_SIZE, '');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
 
       useImperativeHandle(
         ref,
@@ -190,11 +295,12 @@ export default inject(
               if (view === 'datasourceList' && selectedProject?.id) {
                 return loadProjectDatasources(selectedProject.id);
               }
-              return context.reloadProjectList();
+              return fetchProjects(projPageInfo.current, projPageInfo.size, searchKey);
             },
           };
         },
-        [view, selectedProject, context],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [view, selectedProject, projPageInfo, searchKey],
       );
 
       async function loadProjectDatasources(projectId: number) {
@@ -217,20 +323,30 @@ export default inject(
           });
         }
         try {
-          const data = await getConnectionList({ projectId, page: 1, size: 99999 });
+          /**
+           * 改为分批加载：首页只拉 PROJECT_DS_PAGE_SIZE 条；若还有更多页，在末尾插入
+           * "加载更多"哨兵节点，点击后拉取下一页并追加（见 loadMoreProjectDatasources）。
+           */
+          const data = await getConnectionList({
+            projectId,
+            page: 1,
+            size: PROJECT_DS_PAGE_SIZE,
+          });
           const contents = data?.contents || [];
+          const totalPages = data?.page?.totalPages ?? (contents.length ? 1 : 0);
+          dsListPageInfoRef.current = {
+            projectId,
+            page: 1,
+            size: PROJECT_DS_PAGE_SIZE,
+            totalPages,
+          };
           setDatasources(contents);
           dataSourceStatusStore?.asyncUpdateStatus(contents?.map((a) => a.id));
-          setTreeData(
-            contents.map((item) => ({
-              title: item.name,
-              key: `ds-${item.id}`,
-              icon: <StatusIcon item={item} />,
-              isLeaf: false,
-              type: ResourceNodeType.Datasource,
-              data: item,
-            })),
-          );
+          const nodes = contents.map(datasourceToNode);
+          if (1 < totalPages) {
+            nodes.push(makeLoadMoreNode(LM_PROJECT_PREFIX + projectId));
+          }
+          setTreeData(nodes);
         } catch (e) {
           message.error(
             formatMessage({
@@ -243,8 +359,131 @@ export default inject(
         }
       }
 
+      /**
+       * 点击"项目数据源加载更多"哨兵：拉取下一页并追加到数据源列表，按需重新挂回哨兵。
+       */
+      async function loadMoreProjectDatasources() {
+        const info = dsListPageInfoRef.current;
+        if (!info) {
+          return;
+        }
+        const lmKey = LM_PROJECT_PREFIX + info.projectId;
+        if (loadMoreLoadingKeys.has(lmKey)) {
+          return;
+        }
+        setLoadMoreLoadingKeys((prev) => new Set(prev).add(lmKey));
+        try {
+          const nextPage = info.page + 1;
+          const data = await getConnectionList({
+            projectId: info.projectId,
+            page: nextPage,
+            size: info.size,
+          });
+          const contents = data?.contents || [];
+          dsListPageInfoRef.current = { ...info, page: nextPage };
+          setDatasources((prev) => [...prev, ...contents]);
+          dataSourceStatusStore?.asyncUpdateStatus(contents?.map((a) => a.id));
+          const newNodes = contents.map(datasourceToNode);
+          setTreeData((prev) => {
+            const withoutLm = prev.filter((n) => n.key !== lmKey);
+            const merged = [...withoutLm, ...newNodes];
+            if (nextPage < info.totalPages) {
+              merged.push(makeLoadMoreNode(lmKey));
+            }
+            return merged;
+          });
+        } catch (e) {
+          message.error(
+            formatMessage({
+              id: 'odc.ResourceTree.Datasource.FailedToLoad',
+              defaultMessage: '加载数据源失败',
+            }),
+          );
+        } finally {
+          setLoadMoreLoadingKeys((prev) => {
+            const next = new Set(prev);
+            next.delete(lmKey);
+            return next;
+          });
+        }
+      }
+
+      /**
+       * 点击"数据源下库加载更多"哨兵：拉取该数据源下一页库并追加为其子节点。
+       */
+      async function loadMoreDatasourceDatabases(datasourceId: number) {
+        const info = dsDbPageInfoRef.current.get(datasourceId);
+        if (!info) {
+          return;
+        }
+        const lmKey = LM_DS_PREFIX + datasourceId;
+        if (loadMoreLoadingKeys.has(lmKey)) {
+          return;
+        }
+        setLoadMoreLoadingKeys((prev) => new Set(prev).add(lmKey));
+        try {
+          const nextPage = info.page + 1;
+          const res = await listDatabases(
+            null,
+            datasourceId,
+            nextPage,
+            info.size,
+            null,
+            null,
+            null,
+            true,
+            true,
+          );
+          const databases = (res?.contents || []).filter((db) => db.existed);
+          dsDbPageInfoRef.current.set(datasourceId, { ...info, page: nextPage });
+          const newChildren: ResourceTreeDataNode[] = databases.map((database: IDatabase) =>
+            DataBaseTreeData(undefined, database, database?.id, true, null),
+          );
+          const dsKey = `ds-${datasourceId}`;
+          updateNode(dsKey, (n) => {
+            const existing = (n.children || []).filter((c) => c.key !== lmKey);
+            const merged: ResourceTreeDataNode[] = [
+              ...(existing as ResourceTreeDataNode[]),
+              ...newChildren,
+            ];
+            if (nextPage < info.totalPages) {
+              merged.push(makeLoadMoreNode(lmKey));
+            }
+            return { ...n, children: merged };
+          });
+        } catch (e) {
+          message.error(
+            formatMessage({
+              id: 'odc.ResourceTree.Datasource.FailedToLoad',
+              defaultMessage: '加载失败',
+            }),
+          );
+        } finally {
+          setLoadMoreLoadingKeys((prev) => {
+            const next = new Set(prev);
+            next.delete(lmKey);
+            return next;
+          });
+        }
+      }
+
+      /**
+       * "加载更多"哨兵点击分发：按 key 前缀决定拉取项目数据源下一页还是某数据源下库下一页。
+       */
+      function handleLoadMore(key: string) {
+        if (key.startsWith(LM_PROJECT_PREFIX)) {
+          loadMoreProjectDatasources();
+        } else if (key.startsWith(LM_DS_PREFIX)) {
+          const datasourceId = Number(key.replace(LM_DS_PREFIX, ''));
+          if (!Number.isNaN(datasourceId)) {
+            loadMoreDatasourceDatabases(datasourceId);
+          }
+        }
+      }
+
       function enterProject(project: IProject) {
         setSelectedProject(project);
+        setSelectProject?.(project);
         setDatasources([]);
         setTreeData([]);
         setView('datasourceList');
@@ -254,6 +493,7 @@ export default inject(
       function backToProjectList() {
         setView('projectList');
         setSelectedProject(null);
+        setSelectProject?.(null);
         setDatasources([]);
         setTreeData([]);
         autoEnterDoneRef.current = null;
@@ -262,13 +502,17 @@ export default inject(
          */
         setAutoEnterProjectId?.(null);
         setCurrentDatabaseId?.(null);
+        /**
+         * 返回项目列表时刷新当前页，展示最新项目。
+         */
+        fetchProjects(projPageInfo.current, projPageInfo.size, searchKey);
       }
 
       /**
        * 从项目页"登录数据库"进入时（autoEnterProjectId 被设置），自动进入该项目的数据源
        * 列表视图（带返回箭头），与直接访问后手动点进项目的表现一致。
        *
-       * 进入时一并刷新项目列表与数据源目录（reloadProjectList / reloadDatasourceList），
+       * 进入时一并刷新项目列表（本地分页 fetchProjects）与数据源目录（reloadDatasourceList），
        * 加上 enterProject → loadProjectDatasources 刷新项目内数据源——即"全部刷新一遍"，
        * 避免外链首次进入时后端项目↔数据源关联尚未完全同步导致项目下数据源列表不完整、
        * 需手动刷新的问题。
@@ -280,16 +524,14 @@ export default inject(
        * 注意：进入后**不清空** autoEnterProjectId。Container 依赖它保持 SelectPanel 打开
        * （不因 currentDatabaseId 切到主资源树）。仅在 backToProjectList 时才清空。
        * 用 autoEnterDoneRef 记录上次处理过的 (autoEnterProjectId, autoEnterRequestId)，
-       * 避免依赖（view/selectedProject/projectList）变化时重复刷新；只有当目标项目或请求
-       * 序号真正变化时才刷新。
+       * 避免重复刷新；只有当目标项目或请求序号真正变化时才刷新。
        */
       useEffect(() => {
-        if (!autoEnterProjectId || !projectList?.length) {
+        if (!autoEnterProjectId) {
           return;
         }
         /**
-         * 仅当目标项目或进入请求序号变化时才处理，避免 view/selectedProject/projectList
-         * 变化导致重复刷新。
+         * 仅当目标项目或进入请求序号变化时才处理，避免重复刷新。
          */
         if (
           autoEnterDoneRef.current?.projectId === autoEnterProjectId &&
@@ -297,20 +539,32 @@ export default inject(
         ) {
           return;
         }
-        const project = projectList.find((p) => p.id === autoEnterProjectId);
-        if (project) {
+        /**
+         * 项目列表已改为服务端分页，目标项目不一定在当前页，故用 getProject 单条查询
+         * 取代原先的 projectList.find，避免深链目标项目不在首页时自动进入失败。
+         */
+        let cancelled = false;
+        (async () => {
+          const project = await getProject(autoEnterProjectId);
+          if (cancelled || !project) {
+            return;
+          }
           /**
-           * 全部刷新一遍：项目列表 + 数据源目录 +（enterProject 内）项目内数据源。
+           * 全部刷新一遍：项目列表（本地分页）+ 数据源目录 +（enterProject 内）项目内数据源。
            */
-          reloadProjectList?.();
+          fetchProjects(projPageInfo.current, projPageInfo.size, searchKey);
           reloadDatasourceList?.();
           enterProject(project);
           autoEnterDoneRef.current = {
             projectId: autoEnterProjectId,
             requestId: autoEnterRequestId,
           };
-        }
-      }, [autoEnterProjectId, autoEnterRequestId, projectList]);
+        })();
+        return () => {
+          cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [autoEnterProjectId, autoEnterRequestId]);
 
       /**
        * 自动定位数据库：currentDatabaseId 被设置（或再次点击定位时 locateRequestId 自增）。
@@ -358,9 +612,7 @@ export default inject(
              * 到目标 treenode DOM。selectedKeys 已设为 [currentDatabaseId]，故带
              * ant-tree-treenode-selected 的节点即目标库节点。
              */
-            const nodeEl = treeContainerRef.current?.querySelector?.(
-              '.ant-tree-treenode-selected',
-            );
+            const nodeEl = treeContainerRef.current?.querySelector?.('.ant-tree-treenode-selected');
             if (nodeEl && typeof nodeEl.scrollIntoView === 'function') {
               nodeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
             }
@@ -414,10 +666,7 @@ export default inject(
               const targetDsId = targetDb?.dataSource?.id;
               setTreeData((prev) =>
                 prev.map((node) => {
-                  if (
-                    node.type !== ResourceNodeType.Datasource ||
-                    node.children?.length
-                  ) {
+                  if (node.type !== ResourceNodeType.Datasource || node.children?.length) {
                     return node;
                   }
                   const dsId = (node.data as IDatasource)?.id;
@@ -441,9 +690,7 @@ export default inject(
                */
               const newLoadedKeys = [
                 ...loadedKeysRef.current,
-                ...Array.from(groupByDatasource.keys()).map(
-                  (dsId) => `ds-${dsId}`,
-                ),
+                ...Array.from(groupByDatasource.keys()).map((dsId) => `ds-${dsId}`),
               ].filter((v, i, arr) => arr.indexOf(v) === i);
               const targetKey = targetDsId != null ? `ds-${targetDsId}` : null;
               if (targetKey) {
@@ -470,14 +717,7 @@ export default inject(
          * locateRequestId 让"再次点击定位同一个库"也能重新触发本 effect（此时各同值 setter
          * 都会短路，仅该序号变化）。
          */
-      }, [
-        currentDatabaseId,
-        locateRequestId,
-        treeData,
-        view,
-        selectedProject,
-        autoEnterProjectId,
-      ]);
+      }, [currentDatabaseId, locateRequestId, treeData, view, selectedProject, autoEnterProjectId]);
 
       function deleteDataSource(name: string, id: number) {
         Modal.confirm({
@@ -509,24 +749,18 @@ export default inject(
         });
       }
 
+      /**
+       * 项目列表直接映射当前页（projPage）。搜索已改为服务端（fetchProjects 带 name），
+       * 这里不再做客户端过滤。
+       */
       const projects: TreeDataNode[] = useMemo(() => {
-        return projectList
-          ?.map((item) => {
-            if (
-              view === 'projectList' &&
-              searchKey &&
-              !item.name?.toLowerCase()?.includes(searchKey?.toLowerCase())
-            ) {
-              return null;
-            }
-            return {
-              title: item.name,
-              key: item.id,
-              icon: <Icon component={ProjectSvg} />,
-            };
-          })
-          .filter(Boolean);
-      }, [projectList, searchKey, view]);
+        return projPage.map((item) => ({
+          title: item.name,
+          key: item.id,
+          icon: <Icon component={ProjectSvg} />,
+        }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [projPage]);
 
       /**
        * 数据源列表视图下按 searchKey 过滤。
@@ -590,11 +824,15 @@ export default inject(
           switch (type) {
             case ResourceNodeType.Datasource: {
               const datasourceId = (data as IDatasource)?.id;
+              /**
+               * 改为分批加载：首页只拉 DS_DB_PAGE_SIZE 条；若还有更多页，在子节点末尾插入
+               * "加载更多"哨兵，点击后追加下一页（见 loadMoreDatasourceDatabases）。
+               */
               const res = await listDatabases(
                 null,
                 datasourceId,
                 1,
-                99999,
+                DS_DB_PAGE_SIZE,
                 null,
                 null,
                 null,
@@ -602,11 +840,21 @@ export default inject(
                 true,
               );
               const databases = (res?.contents || []).filter((db) => db.existed);
+              const totalPages = res?.page?.totalPages ?? (res?.contents?.length ? 1 : 0);
+              dsDbPageInfoRef.current.set(datasourceId, {
+                page: 1,
+                size: DS_DB_PAGE_SIZE,
+                totalPages,
+              });
+              const children: ResourceTreeDataNode[] = databases.map((database: IDatabase) =>
+                DataBaseTreeData(undefined, database, database?.id, true, null),
+              );
+              if (1 < totalPages) {
+                children.push(makeLoadMoreNode(LM_DS_PREFIX + datasourceId));
+              }
               updateNode(key, (n) => ({
                 ...n,
-                children: databases.map((database: IDatabase) =>
-                  DataBaseTreeData(undefined, database, database?.id, true, null),
-                ),
+                children,
               }));
               break;
             }
@@ -647,6 +895,29 @@ export default inject(
 
       const renderNode = (node: ResourceTreeDataNode): React.ReactNode => {
         const { type, sessionId } = node;
+        if (type === ResourceNodeType.LoadMore) {
+          const lmKey = String(node.key);
+          const loading = loadMoreLoadingKeys.has(lmKey);
+          return (
+            <span
+              className={styles.loadMore}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleLoadMore(lmKey);
+              }}
+            >
+              {loading
+                ? formatMessage({
+                    id: 'odc.ResourceTree.Loading',
+                    defaultMessage: '加载中...',
+                  })
+                : formatMessage({
+                    id: 'odc.ResourceTree.LoadMore',
+                    defaultMessage: '加载更多',
+                  })}
+            </span>
+          );
+        }
         /**
          * 数据源行复用与数据源 SelectPanel 一致的渲染：连接 popover、环境徽标与行操作，
          * 使两个面板外观一致。
@@ -748,9 +1019,7 @@ export default inject(
                           })}
                         </Action.Link>
                         <Action.Link
-                          onClick={() =>
-                            deleteDataSource(node.title as string, dataSource.id)
-                          }
+                          onClick={() => deleteDataSource(node.title as string, dataSource.id)}
                           key={'delete'}
                         >
                           {formatMessage({
@@ -791,7 +1060,11 @@ export default inject(
                   <Input.Search
                     allowClear
                     onSearch={(v) => {
+                      /**
+                       * 搜索改为服务端：重置到第一页并带 name 重新拉取。
+                       */
                       setSearchKey(v);
+                      fetchProjects(1, projPageInfo.size, v);
                     }}
                     placeholder={formatMessage({
                       id: 'odc.ResourceTree.Project.SearchForProjectName',
@@ -802,32 +1075,47 @@ export default inject(
                   />
                 </div>
                 <div className={styles.list}>
-                  {projects?.length ? (
-                    <Tree
-                      showIcon
-                      selectedKeys={selectKeys}
-                      onSelect={(keys, info) => {
-                        if (!info.selected) {
-                          /**
-                           * disable unselect
-                           */
-                          closeSelectPanel();
-                          return;
-                        }
-                        const projectId = keys?.[0];
-                        const project = projectList?.find((p) => p.id === projectId);
-                        if (project) {
-                          enterProject(project);
-                        }
-                      }}
-                      selectable
-                      multiple={false}
-                      treeData={projects}
-                    />
-                  ) : (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                  )}
+                  <Spin spinning={projLoading}>
+                    {projects?.length ? (
+                      <Tree
+                        showIcon
+                        selectedKeys={selectKeys}
+                        onSelect={(keys, info) => {
+                          if (!info.selected) {
+                            /**
+                             * disable unselect
+                             */
+                            closeSelectPanel();
+                            return;
+                          }
+                          const projectId = keys?.[0];
+                          const project = projPage?.find((p) => p.id === projectId);
+                          if (project) {
+                            enterProject(project);
+                          }
+                        }}
+                        selectable
+                        multiple={false}
+                        treeData={projects}
+                      />
+                    ) : (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    )}
+                  </Spin>
                 </div>
+                {projPageInfo.total > 0 && (
+                  <div className={styles.pagination}>
+                    <Pagination
+                      size="small"
+                      current={projPageInfo.current}
+                      total={projPageInfo.total}
+                      pageSize={projPageInfo.size}
+                      showSizeChanger
+                      pageSizeOptions={[10, 20, 50]}
+                      onChange={(page, pageSize) => fetchProjects(page, pageSize, searchKey)}
+                    />
+                  </div>
+                )}
               </div>
             }
             bottomLoading={false}
@@ -866,20 +1154,20 @@ export default inject(
                 <Spin spinning={dsLoading}>
                   {filteredTreeData?.length ? (
                     <div ref={treeContainerRef}>
-                    <Tree
-                      ref={treeRef}
-                      className={styles.tree}
-                      showIcon
-                      expandAction="click"
-                      treeData={filteredTreeData}
-                      titleRender={renderNode}
-                      loadData={loadData}
-                      expandedKeys={expandedKeys}
-                      loadedKeys={loadedKeys}
-                      onExpand={onExpand}
-                      onLoad={onLoad}
-                      selectedKeys={currentDatabaseId ? [currentDatabaseId] : []}
-                    />
+                      <Tree
+                        ref={treeRef}
+                        className={styles.tree}
+                        showIcon
+                        expandAction="click"
+                        treeData={filteredTreeData}
+                        titleRender={renderNode}
+                        loadData={loadData}
+                        expandedKeys={expandedKeys}
+                        loadedKeys={loadedKeys}
+                        onExpand={onExpand}
+                        onLoad={onLoad}
+                        selectedKeys={currentDatabaseId ? [currentDatabaseId] : []}
+                      />
                     </div>
                   ) : (
                     <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />

@@ -84,6 +84,11 @@ export enum ResourceNodeType {
    * 数据源分组节点（项目模式下按数据源分组的树节点）。
    */
   Datasource,
+  /**
+   * "加载更多"哨兵节点：项目内数据源列表 / 数据源下库列表改为分批加载后，
+   * 当还有更多数据时在末尾插入此节点，点击拉取下一页。
+   */
+  LoadMore,
 }
 
 interface ExtraData {
