@@ -20,7 +20,6 @@ import { useContext, useEffect, useRef, useState } from 'react';
 import ResourceTreeContext from '../../context/ResourceTreeContext';
 import tracert from '@/util/tracert';
 import SelectPanel from './SelectPanel';
-import { Spin } from 'antd';
 import DatabaseTree from './DatabaseTree';
 import TreeStateStore, { ITreeStateCache } from './TreeStateStore';
 import { useParams } from '@umijs/max';
@@ -45,16 +44,6 @@ export default inject(
 
     const cacheRef = useRef<ITreeStateCache>({});
 
-    const [loading, setLoading] = useState(true);
-
-    async function initData() {
-      await resourcetreeContext.reloadDatasourceList();
-      /**
-       * 项目列表已改为服务端分页，由 SelectPanel/Project 挂载时按页拉取，不再在此全量加载。
-       */
-      setLoading(false);
-    }
-
     const setSelectPanel = (open) => {
       setSelectPanelOpen(open);
       modalStore.changeDatabaseSearchModalVisible(false);
@@ -62,7 +51,10 @@ export default inject(
     };
 
     useEffect(() => {
-      initData();
+      /**
+       * 数据源页签已在团队空间隐藏，datasourceList 不再于此全量拉取（/stats 无分页）：
+       * 个人空间由 Datasource 页签挂载时懒加载，项目列表由 SelectPanel/Project 按页拉取。
+       */
       tracert.expo('a3112.b41896.c330988');
     }, []);
 
@@ -85,13 +77,6 @@ export default inject(
       }
     }, [currentDatabaseId, autoEnterProjectId]);
 
-    if (loading) {
-      return (
-        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 20 }}>
-          <Spin />
-        </div>
-      );
-    }
     return (
       <TreeStateStore.Provider
         value={{

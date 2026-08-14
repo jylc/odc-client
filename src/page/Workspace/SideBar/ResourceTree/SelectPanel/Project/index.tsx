@@ -137,7 +137,6 @@ export default inject(
         locateRequestId,
         autoEnterRequestId,
         setSelectProject,
-        reloadDatasourceList,
       } = context;
 
       const [view, setView] = useState<View>('projectList');
@@ -484,10 +483,9 @@ export default inject(
        * 从项目页"登录数据库"进入时（autoEnterProjectId 被设置），自动进入该项目的数据源
        * 列表视图（带返回箭头），与直接访问后手动点进项目的表现一致。
        *
-       * 进入时一并刷新项目列表（本地分页 fetchProjects）与数据源目录（reloadDatasourceList），
-       * 加上 enterProject → loadProjectDatasources 刷新项目内数据源——即"全部刷新一遍"，
-       * 避免外链首次进入时后端项目↔数据源关联尚未完全同步导致项目下数据源列表不完整、
-       * 需手动刷新的问题。
+       * 进入时一并刷新项目列表（本地分页 fetchProjects），加上 enterProject →
+       * loadProjectDatasources 刷新项目内数据源——避免外链首次进入时后端项目↔数据源关联
+       * 尚未完全同步导致项目下数据源列表不完整、需手动刷新的问题。
        *
        * 即便已在该项目页签下（autoEnterProjectId 同值、setAutoEnterProjectId 短路），每次
        * 带 projectId 深链进入都会自增 autoEnterRequestId，本 effect 据此重新刷新，从而能
@@ -522,10 +520,9 @@ export default inject(
             return;
           }
           /**
-           * 全部刷新一遍：项目列表（本地分页）+ 数据源目录 +（enterProject 内）项目内数据源。
+           * 全部刷新一遍：项目列表（本地分页）+（enterProject 内）项目内数据源。
            */
           fetchProjects(projPageInfo.current, projPageInfo.size, searchKey);
-          reloadDatasourceList?.();
           enterProject(project);
           autoEnterDoneRef.current = {
             projectId: autoEnterProjectId,
@@ -712,7 +709,6 @@ export default inject(
               if (context.selectDatasourceId === id) {
                 context.setSelectDatasourceId(null);
               }
-              context?.reloadDatasourceList();
               if (selectedProject?.id) {
                 loadProjectDatasources(selectedProject.id);
               }
@@ -1155,7 +1151,6 @@ export default inject(
                   setAddDSVisiable(false);
                 }}
                 onSuccess={() => {
-                  context?.reloadDatasourceList();
                   if (selectedProject?.id) {
                     loadProjectDatasources(selectedProject.id);
                   }
@@ -1171,7 +1166,6 @@ export default inject(
                   setCopyDatasourceId(null);
                 }}
                 onSuccess={() => {
-                  context?.reloadDatasourceList();
                   if (selectedProject?.id) {
                     loadProjectDatasources(selectedProject.id);
                   }

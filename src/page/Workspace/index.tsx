@@ -71,10 +71,8 @@ const Workspace: React.FC<WorkspaceProps> = (props: WorkspaceProps) => {
   const { tabKey } = useParams<{ tabKey: string }>();
 
   /**
-   * 首次挂载时 Container.initData() 已加载过数据源/项目列表。带参深链"首次打开页面"
-   * 时 resolveParams 也会跑一次（isReady 翻 true 触发），此时不需要再 reload（与 initData
-   * 并发重复调用同一个 useRequest 的 run，会导致数据源列表一直处于加载态）。仅在"再次
-   * 带参进入"（非首次）时才刷新。用 ref 标记是否已执行过一次 resolveParams。
+   * 带参深链"首次打开页面"时 resolveParams 会跑一次（isReady 翻 true 触发），仅在"再次
+   * 带参进入"（非首次）时才需要刷新列表。用 ref 标记是否已执行过一次 resolveParams。
    */
   const hasResolvedRef = useRef(false);
   function resolveParams() {
@@ -92,17 +90,11 @@ const Workspace: React.FC<WorkspaceProps> = (props: WorkspaceProps) => {
        * SelectPanel 打开；设置 currentDatabaseId 让 Project 树自动定位/高亮目标数据库。
        * Container 的 effect 在 autoEnterProjectId 存在时不会因 currentDatabaseId 关闭面板。
        *
-       * 仅在"再次带参进入"（非首次挂载）时刷新数据源目录；项目列表为服务端分页，由
+       * 仅在"再次带参进入"（非首次挂载）时刷新项目相关列表：项目列表为服务端分页，由
        * SelectPanel/Project 的 autoEnter effect 刷新；项目内数据源由 autoEnterProjectId →
-       * enterProject → loadProjectDatasources 刷新。
+       * enterProject → loadProjectDatasources 刷新。数据源页签已在团队空间隐藏，不再全量
+       * 拉取数据源目录。
        */
-      if (!isFirstResolve) {
-        /**
-         * 项目列表已改为服务端分页本地拉取：刷新由 SelectPanel/Project 的 autoEnter effect
-         * 接管（fetchProjects + getProject），此处仅刷新数据源目录。
-         */
-        resourceTreeContext?.reloadDatasourceList?.();
-      }
       resourceTreeContext?.setSelectTabKey(ResourceTreeTab.project);
       resourceTreeContext?.setAutoEnterProjectId?.(projectId);
       /**
@@ -116,9 +108,10 @@ const Workspace: React.FC<WorkspaceProps> = (props: WorkspaceProps) => {
       databaseId && openNewSQLPage(databaseId, 'project');
     } else if (datasourceId) {
       /**
-       * 仅在"再次带参进入"时刷新数据源列表（首次由 Container.initData 加载）。
+       * 个人空间下数据源页签可见，"再次带参进入"时刷新其列表；团队空间该页签已隐藏、
+       * 不再全量拉取，标题等展示信息由 WorkspaceStore 的 selectDatasource 按 id 单条兜底。
        */
-      if (!isFirstResolve) {
+      if (!isFirstResolve && props.userStore?.isPrivateSpace()) {
         resourceTreeContext?.reloadDatasourceList?.();
       }
       resourceTreeContext?.setSelectTabKey(ResourceTreeTab.datasource);

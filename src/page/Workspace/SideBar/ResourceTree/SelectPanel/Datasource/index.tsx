@@ -78,6 +78,16 @@ export default inject('dataSourceStatusStore')(
       console.log('wrapperHeight', wrapperHeight);
       const treeWrapperRef = useRef<HTMLDivElement>();
       const context = useContext(ResourceTreeContext);
+      useEffect(() => {
+        /**
+         * 数据源列表改为本组件挂载时懒加载（原先由 Container.initData 在进入工作台时
+         * 无条件全量拉取）。团队空间该页签已隐藏，此 effect 不会执行。
+         */
+        if (!context?.datasourceList?.length) {
+          context?.reloadDatasourceList?.();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
       let { datasourceList } = context;
       datasourceList = useMemo(() => {
         return datasourceList?.filter((item) => !item.temp);
@@ -251,8 +261,7 @@ export default inject('dataSourceStatusStore')(
                                   items: [
                                     {
                                       label: formatMessage({
-                                        id:
-                                          'odc.src.page.Workspace.SideBar.ResourceTree.SelectPanel.Datasource.Clone',
+                                        id: 'odc.src.page.Workspace.SideBar.ResourceTree.SelectPanel.Datasource.Clone',
                                       }), //'克隆'
                                       key: 'clone',
                                       onClick: (e) => {
@@ -312,8 +321,7 @@ export default inject('dataSourceStatusStore')(
                                     >
                                       {
                                         formatMessage({
-                                          id:
-                                            'odc.src.page.Workspace.SideBar.ResourceTree.SelectPanel.Datasource.Clone.1',
+                                          id: 'odc.src.page.Workspace.SideBar.ResourceTree.SelectPanel.Datasource.Clone.1',
                                         }) /* 
                                     克隆
                                    */

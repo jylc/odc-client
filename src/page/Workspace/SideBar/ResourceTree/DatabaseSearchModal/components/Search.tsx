@@ -31,9 +31,7 @@ const Search = ({
   loading,
   setDatabase,
 }: Iprops) => {
-  const { selectDatasourceId, selectProject, datasourceList } = useContext(ResourceTreeContext);
-
-  const selectDatasource = datasourceList?.find((d) => d.id == selectDatasourceId);
+  const { selectProject, selectDatasource } = useContext(ResourceTreeContext);
 
   const inputRef = useRef<InputRef>(null);
 

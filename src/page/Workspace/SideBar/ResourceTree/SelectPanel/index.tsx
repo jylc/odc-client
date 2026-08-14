@@ -16,7 +16,7 @@
 
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import SideTabs, { ITab } from '../../components/SideTabs';
-import ResourceTreeContext, { ResourceTreeTab } from '@/page/Workspace/context/ResourceTreeContext';
+import ResourceTreeContext from '@/page/Workspace/context/ResourceTreeContext';
 import { formatMessage } from '@/util/intl';
 import DataSourceTree from './Datasource';
 import ProjectTree from './Project';
@@ -39,15 +39,19 @@ enum PanelType {
 }
 const SelectPanel: React.FC<IProps> = function ({ userStore, onClose }) {
   const resourcetreeContext = useContext(ResourceTreeContext);
-  const { selectProjectId, selectDatasourceId, selectTabKey } = resourcetreeContext;
+  const { selectProjectId, selectDatasourceId } = resourcetreeContext;
+  const isPersonal = userStore?.isPrivateSpace();
+  /**
+   * 团队空间已隐藏"数据源"页签（其数据源目录接口 /stats 无分页、只能全量拉取），SelectPanel
+   * 仅保留"项目"页签，数据源一律经项目内列表（分页懒加载）访问；个人空间仅有"数据源"页签。
+   */
   const [selectPanel, setSelectPanel] = useState<PanelType>(
-    selectTabKey === ResourceTreeTab.project ? PanelType.Project : PanelType.DataSource,
+    isPersonal ? PanelType.DataSource : PanelType.Project,
   );
   const [envs, setEnvs] = useState<number[]>([]);
   const [connectTypes, setConnectTypes] = useState<ConnectType[]>([]);
   const sourceRef = useRef<any>();
   const projectRef = useRef<any>();
-  const isPersonal = userStore?.isPrivateSpace();
   const datasource: ITab = {
     title: formatMessage({
       id: 'odc.SideBar.ResourceTree.Container.DataSource',
@@ -127,17 +131,8 @@ const SelectPanel: React.FC<IProps> = function ({ userStore, onClose }) {
     ],
   };
   useEffect(() => {
-    /**
-     * 已选中项目时展示"项目"页签；从项目页"登录数据库"进入时（selectTabKey 为 project）
-     * 也默认展示"项目"页签，以便 Project 子组件消费 autoEnterProjectId 自动进入项目内
-     * 数据源视图。其余情况回到"数据源"页签。
-     */
-    if (selectProjectId || selectTabKey === ResourceTreeTab.project) {
-      setSelectPanel(PanelType.Project);
-    } else {
-      setSelectPanel(PanelType.DataSource);
-    }
-  }, [selectDatasourceId, selectProjectId, selectTabKey]);
+    setSelectPanel(isPersonal ? PanelType.DataSource : PanelType.Project);
+  }, [isPersonal]);
   const isSelected = selectDatasourceId || selectProjectId;
   return (
     <>
@@ -147,7 +142,7 @@ const SelectPanel: React.FC<IProps> = function ({ userStore, onClose }) {
         setSelectTabKey={(v) => {
           setSelectPanel(v as PanelType);
         }}
-        tabs={isPersonal ? [datasource] : [datasource, project]}
+        tabs={isPersonal ? [datasource] : [project]}
         leftAction={
           !isSelected ? null : (
             <Icon

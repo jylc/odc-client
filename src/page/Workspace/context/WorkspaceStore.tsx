@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityBarItemType } from '../ActivityBar/type';
 import ActivityBarContext from './ActivityBarContext';
 import ResourceTreeContext, { ResourceTreeTab } from './ResourceTreeContext';
@@ -23,7 +23,7 @@ import { IDatasource } from '@/d.ts/datasource';
 import { IProject } from '@/d.ts/project';
 import login from '@/store/login';
 import { useRequest } from 'ahooks';
-import { getDataSourceGroupByProject } from '@/common/network/connection';
+import { getConnectionDetail, getDataSourceGroupByProject } from '@/common/network/connection';
 import { useParams } from '@umijs/max';
 import { toInteger } from 'lodash';
 import datasourceStatus from '@/store/datasourceStatus';
@@ -53,6 +53,11 @@ export default function WorkspaceStore({ children }) {
    * 由 SelectPanel/Project 本地拉取当前页，不再在 context 维护全量 projectList。
    */
   const [selectProject, setSelectProject] = useState<IProject>(null);
+  /**
+   * 当前已进入的数据源对象（display-only）。团队空间已隐藏数据源页签、不再全量拉取
+   * datasourceList，深链按数据源进入时列表中找不到目标，改由下方 effect 按 id 单条兜底。
+   */
+  const [selectDatasource, setSelectDatasource] = useState<IDatasource>(null);
   /**
    * 从项目页"登录数据库"进入时设置，作为一次性信号通知 SelectPanel 自动进入该项目并
    * 保持 SelectPanel 打开（显示带返回箭头的项目内数据源视图）。进入后由 Project 组件清空。
@@ -88,6 +93,33 @@ export default function WorkspaceStore({ children }) {
    */
   const pollingDatabase = useCallback(() => {}, []);
 
+  useEffect(() => {
+    if (!selectDatasourceId) {
+      setSelectDatasource(null);
+      return;
+    }
+    const found = datasourceList?.find((d) => d.id === selectDatasourceId);
+    if (found) {
+      setSelectDatasource(found);
+      return;
+    }
+    /**
+     * 列表未加载（团队空间不再全量拉取 datasourceList）时按 id 单条查询兜底，
+     * 供主资源树标题、全局搜索弹窗等展示数据源名。
+     */
+    let cancelled = false;
+    getConnectionDetail(selectDatasourceId)
+      .then((d) => {
+        if (!cancelled && d) {
+          setSelectDatasource(d);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [selectDatasourceId, datasourceList]);
+
   return (
     <ResourceTreeContext.Provider
       value={{
@@ -101,6 +133,7 @@ export default function WorkspaceStore({ children }) {
         reloadDatasourceList,
         selectProject,
         setSelectProject,
+        selectDatasource,
         currentDatabaseId,
         setCurrentDatabaseId,
         locateRequestId,

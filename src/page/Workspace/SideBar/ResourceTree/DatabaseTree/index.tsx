@@ -35,11 +35,10 @@ const DatabaseTree: React.FC<IProps> = function ({ openSelectPanel }) {
     selectDatasourceId,
     selectProjectId,
     selectProject,
-    datasourceList,
+    selectDatasource,
     setCurrentDatabaseId,
     pollingDatabase,
   } = useContext(ResourceTreeContext);
-  const selectDatasource = datasourceList?.find((d) => d.id == selectDatasourceId);
 
   function onTitleClick() {
     openSelectPanel();

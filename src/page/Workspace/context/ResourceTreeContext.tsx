@@ -38,6 +38,12 @@ interface IResourceTreeContext {
    */
   selectProject?: IProject;
   setSelectProject?: (v: IProject | null) => void;
+  /**
+   * 当前已进入的数据源对象（display-only，仅供 DatabaseTree 标题、DatabaseSearchModal
+   * 展示数据源名等）。优先取自 datasourceList；团队空间已隐藏数据源页签、不再全量拉取
+   * 列表，列表缺失时由 WorkspaceStore 按 id 单条查询兜底（getConnectionDetail）。
+   */
+  selectDatasource?: IDatasource;
   currentDatabaseId?: number;
   setCurrentDatabaseId?: (v: number) => void;
   /**
@@ -74,5 +80,6 @@ const ResourceTreeContext = React.createContext<IResourceTreeContext>({
   selectDatasourceId: null,
   datasourceList: [],
   selectProject: null,
+  selectDatasource: null,
 });
 export default ResourceTreeContext;
