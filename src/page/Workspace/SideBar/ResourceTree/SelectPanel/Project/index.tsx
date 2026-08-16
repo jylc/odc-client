@@ -480,9 +480,11 @@ export default inject(
         setAutoEnterProjectId?.(null);
         setCurrentDatabaseId?.(null);
         /**
-         * 返回项目列表时刷新当前页，展示最新项目。
+         * 返回项目列表时清空搜索词（受控输入框同步清空显示）并重置回第一页刷新，
+         * 展示全量最新项目。
          */
-        fetchProjects(projPageInfo.current, projPageInfo.size, searchKey);
+        setSearchKey('');
+        fetchProjects(1, projPageInfo.size, '');
       }
 
       /**
@@ -1033,13 +1035,15 @@ export default inject(
                 <div className={styles.search}>
                   <Input.Search
                     allowClear
+                    value={searchKey}
                     onChange={(e) => {
                       /**
-                       * 清空输入（allowClear 的 X 或退格删完）只触发 onChange 不触发
-                       * onSearch，需在此恢复未过滤的全量列表。
+                       * 受控输入：同步状态；清空（allowClear 的 X 或退格删完）只触发
+                       * onChange 不触发 onSearch，需在此恢复未过滤的全量列表。
                        */
-                      if (!e.target.value && searchKey) {
-                        setSearchKey('');
+                      const v = e.target.value;
+                      setSearchKey(v);
+                      if (!v) {
                         fetchProjects(1, projPageInfo.size, '');
                       }
                     }}
