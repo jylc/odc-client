@@ -2711,6 +2711,7 @@
   "odc.component.DetailContent.ViewOnly": "View Only",
   "odc.DataArchiveTask.CreateModal.AreYouSureYouWant": "Are you sure that you want to cancel the data archiving task?",
   "odc.ResourceTree.Datasource.SearchForDataSources": "Search Data Sources",
+  "odc.ResourceTree.LoadMore": "Load more",
   "odc.DataArchiveTask.DetailContent.VariableConfig.TimeFormat": "Time Format",
   "odc.NewSSODrawerButton.SSOForm.UserInformationDataStructureType": "User Data Structure Type",
   "odc.SensitiveColumn.components.SacnRule.SelectADatabase": "Select a database",

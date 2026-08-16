@@ -127,6 +127,11 @@ export default inject(
       ref,
     ) {
       const [searchKey, setSearchKey] = useState('');
+      /**
+       * 项目内数据源列表的搜索词。与项目列表的 searchKey 分开维护：否则在项目列表
+       * 搜索（如"2"）后进入项目，残留的 searchKey 会立即把数据源列表过滤成空。
+       */
+      const [dsSearchKey, setDsSearchKey] = useState('');
       const context = useContext(ResourceTreeContext);
       const { cache: treeStateStoreCache } = useContext(TreeStateStore);
       const {
@@ -467,6 +472,7 @@ export default inject(
         setSelectProject?.(null);
         setDatasources([]);
         setTreeData([]);
+        setDsSearchKey('');
         autoEnterDoneRef.current = null;
         /**
          * 返回项目列表时清掉一次性信号，避免残留。
@@ -731,18 +737,18 @@ export default inject(
       }, [projPage]);
 
       /**
-       * 数据源列表视图下按 searchKey 过滤。
+       * 数据源列表视图下按 dsSearchKey 过滤。
        */
       const filteredTreeData = useMemo(() => {
-        if (view !== 'datasourceList' || !searchKey) {
+        if (view !== 'datasourceList' || !dsSearchKey) {
           return treeData;
         }
         return treeData.filter((node) =>
           String(node.title ?? '')
             .toLowerCase()
-            .includes(searchKey.toLowerCase()),
+            .includes(dsSearchKey.toLowerCase()),
         );
-      }, [treeData, searchKey, view]);
+      }, [treeData, dsSearchKey, view]);
 
       /**
        * 不可变地更新 treeData 中单个节点（按 key 匹配）并重建其子树。
@@ -1027,6 +1033,16 @@ export default inject(
                 <div className={styles.search}>
                   <Input.Search
                     allowClear
+                    onChange={(e) => {
+                      /**
+                       * 清空输入（allowClear 的 X 或退格删完）只触发 onChange 不触发
+                       * onSearch，需在此恢复未过滤的全量列表。
+                       */
+                      if (!e.target.value && searchKey) {
+                        setSearchKey('');
+                        fetchProjects(1, projPageInfo.size, '');
+                      }
+                    }}
                     onSearch={(v) => {
                       /**
                        * 搜索改为服务端：重置到第一页并带 name 重新拉取。
@@ -1107,8 +1123,17 @@ export default inject(
               <div className={styles.search}>
                 <Input.Search
                   allowClear
+                  onChange={(e) => {
+                    /**
+                     * 同项目列表搜索：清空输入时重置过滤条件（此处的数据源过滤为客户端
+                     * memo，仅清 searchKey 即可恢复全部）。
+                     */
+                    if (!e.target.value && dsSearchKey) {
+                      setDsSearchKey('');
+                    }
+                  }}
                   onSearch={(v) => {
-                    setSearchKey(v);
+                    setDsSearchKey(v);
                   }}
                   placeholder={formatMessage({
                     id: 'odc.ResourceTree.Datasource.SearchForDataSources',

@@ -2848,6 +2848,7 @@
   "odc.component.DetailContent.ViewOnly": "僅查看",
   "odc.DataArchiveTask.CreateModal.AreYouSureYouWant": "是否確認取消此資料歸檔？",
   "odc.ResourceTree.Datasource.SearchForDataSources": "搜尋資料來源",
+  "odc.ResourceTree.LoadMore": "載入更多",
   "odc.DataArchiveTask.DetailContent.VariableConfig.TimeFormat": "時間格式",
   "odc.NewSSODrawerButton.SSOForm.UserInformationDataStructureType": "使用者資訊資料結構類型",
   "odc.SensitiveColumn.components.SacnRule.SelectADatabase": "請選擇資料庫",

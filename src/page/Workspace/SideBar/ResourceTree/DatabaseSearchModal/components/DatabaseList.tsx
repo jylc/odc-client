@@ -2,12 +2,12 @@ import { formatMessage } from '@/util/intl';
 import { Button, Spin } from 'antd';
 import styles from '../index.less';
 import DataBaseStatusIcon from '@/component/StatusIcon/DatabaseIcon';
-import ResourceTreeContext from '@/page/Workspace/context/ResourceTreeContext';
-import React, { useState, useContext, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { IDatabase, IDatabaseObject } from '@/d.ts/database';
 import { ModalStore } from '@/store/modal';
 import { openNewSQLPage } from '@/store/helper/page';
 import { listDatabases } from '@/common/network/database';
+import datasourceStatus from '@/store/datasourceStatus';
 import { useDebounceFn } from 'ahooks';
 
 /**
@@ -26,6 +26,12 @@ interface Iprops {
   isSelectAll: boolean;
   setSelectAllState: React.Dispatch<React.SetStateAction<boolean>>;
   modalStore: ModalStore;
+  /**
+   * 搜索范围（含"已选库归属/display-only 项目"等兜底，由弹窗统一计算），
+   * 不直接用 context 的 selectProjectId/selectDatasourceId——项目页签流程不设置它们。
+   */
+  scopeProjectId?: number;
+  scopeDatasourceId?: number;
 }
 
 const DatabaseList = ({
@@ -38,8 +44,9 @@ const DatabaseList = ({
   setSelectAllState,
   modalStore,
   objectlist,
+  scopeProjectId,
+  scopeDatasourceId,
 }: Iprops) => {
-  const { selectProjectId, selectDatasourceId } = useContext(ResourceTreeContext);
   const [activeDatabase, setActiveDatabase] = useState<IDatabase>();
   const [options, setOptions] = useState<IDatabase[]>([]);
   const [pageInfo, setPageInfo] = useState<{ page: number; totalPages: number }>({
@@ -54,8 +61,8 @@ const DatabaseList = ({
     const myId = ++reqIdRef.current;
     try {
       const res = await listDatabases(
-        selectProjectId,
-        selectDatasourceId,
+        scopeProjectId ?? null,
+        scopeDatasourceId ?? null,
         page,
         SEARCH_PAGE_SIZE,
         name || null,
@@ -68,6 +75,14 @@ const DatabaseList = ({
         return;
       }
       const contents = res?.contents || [];
+      /**
+       * 把本页库所属数据源 id 喂给全局连通性轮询 store（与项目页签同模式），保证行首
+       * 状态图标取到实时状态——否则 statusMap 未命中时会一直显示列表响应里内嵌的
+       * TESTING 状态快照（转圈图标），且无轮询更新它。
+       */
+      datasourceStatus.asyncUpdateStatus(
+        contents.map((db) => db.dataSource?.id).filter((id) => id != null),
+      );
       const totalPages = res?.page?.totalPages ?? (contents.length ? 1 : 0);
       setPageInfo({ page, totalPages });
       setOptions((prev) => (replace ? contents : [...prev, ...contents]));
@@ -118,7 +133,7 @@ const DatabaseList = ({
     e.stopPropagation();
     modalStore?.databaseSearchsSetExpandedKeysFunction?.(db.id);
     modalStore?.changeDatabaseSearchModalVisible(false);
-    db.id && openNewSQLPage(db.id, selectProjectId ? 'project' : 'datasource');
+    db.id && openNewSQLPage(db.id, scopeProjectId ? 'project' : 'datasource');
   };
 
   const applyPermission = (e, db: IDatabase) => {
@@ -188,7 +203,7 @@ const DatabaseList = ({
                       <DataBaseStatusIcon item={db} />
                       <div style={{ padding: '0 4px' }}>{db?.name}</div>
                       <div className={styles.subInfo}>
-                        {selectProjectId ? db?.dataSource?.name : null}
+                        {scopeProjectId ? db?.dataSource?.name : null}
                       </div>
                     </div>
                     {getPositioninButton(db)}

@@ -19,6 +19,11 @@ interface Iprops {
   setSelectAllState: React.Dispatch<React.SetStateAction<boolean>>;
   loading: boolean;
   setDatabase: React.Dispatch<React.SetStateAction<IDatabase>>;
+  /**
+   * 无侧边栏范围时由弹窗从激活 SQL 窗口的库推导出的数据源名（display-only），
+   * 与实际搜索范围（getSearchScope 的 sessionDatabase 兜底）保持一致。
+   */
+  scopeDatasourceName?: string;
 }
 const Search = ({
   database,
@@ -30,6 +35,7 @@ const Search = ({
   setSelectAllState,
   loading,
   setDatabase,
+  scopeDatasourceName,
 }: Iprops) => {
   const { selectProject, selectDatasource } = useContext(ResourceTreeContext);
 
@@ -160,7 +166,14 @@ const Search = ({
                 id: 'src.page.Workspace.SideBar.ResourceTree.DatabaseSearchModal.components.987D5B8A',
                 defaultMessage: '当前数据源: ${selectDatasource?.name}',
               },
-              { selectDatasourceName: selectDatasource?.name },
+              {
+                /**
+                 * 无侧边栏选中数据源时（如已返回项目列表），依次兜底显示弹窗已选库、
+                 * 激活 SQL 窗口库归属的数据源名，与实际搜索范围保持一致。
+                 */
+                selectDatasourceName:
+                  selectDatasource?.name ?? database?.dataSource?.name ?? scopeDatasourceName,
+              },
             )}
       </div>
       <span className={styles.title}>

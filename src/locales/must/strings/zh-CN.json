@@ -2968,6 +2968,7 @@
   "odc.ScriptFile.Item.Delete": "删除",
   "odc.Project.CreateProject.Drawer.CreateAProject": "新建项目",
   "odc.ResourceTree.Datasource.SearchForDataSources": "搜索数据源",
+  "odc.ResourceTree.LoadMore": "加载更多",
   "odc.SensitiveColumn.components.SacnRule.SelectADatabase": "请选择数据库",
   "odc.ExternalIntegration.SqlInterceptor.EnterAConfigurationName": "请输入配置名称",
   "odc.Env.components.EditRuleDrawer.RuleType": "规则类型",

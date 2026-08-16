@@ -26,7 +26,7 @@ import { observer } from 'mobx-react';
 
 export default observer(function DataBaseStatusIcon({ item }: { item: IDatabase }) {
   const datasource = item.dataSource;
-  const statusInfo = datasourceStatus.statusMap.get(datasource?.id) || datasource.status;
+  const statusInfo = datasourceStatus.statusMap.get(datasource?.id) || datasource?.status;
   let status = statusInfo?.status;
   const icon = getDataSourceStyleByConnectType(datasource?.type)?.dbIcon;
   switch (status) {
