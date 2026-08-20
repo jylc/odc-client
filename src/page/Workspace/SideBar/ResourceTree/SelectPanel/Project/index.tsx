@@ -68,7 +68,6 @@ import ResourceLayout from '../../Layout';
 import {
   DS_DB_PAGE_SIZE,
   LM_DS_PREFIX,
-  LM_PROJECT_PREFIX,
   PROJECT_DS_PAGE_SIZE,
   datasourceToNode,
   makeLoadMoreNode,
@@ -149,6 +148,16 @@ export default inject(
       const [datasources, setDatasources] = useState<IDatasource[]>([]);
       const [dsLoading, setDsLoading] = useState(false);
       /**
+       * 项目内数据源列表的分页信息（服务端分页，整页替换），供页脚分页器渲染：
+       * current/size 为当前页与每页条数，total 为后端返回的总条数（搜索时为命中条数）。
+       */
+      const [dsPageInfo, setDsPageInfo] = useState<{
+        current: number;
+        size: number;
+        total: number;
+        totalPages: number;
+      }>({ current: 1, size: PROJECT_DS_PAGE_SIZE, total: 0, totalPages: 0 });
+      /**
        * 每次加载数据源列表（进入项目 / 刷新）时自增，使树状态（expandedKeys/loadedKeys）
        * 不会从上一次访问同一项目时残留。
        */
@@ -202,7 +211,7 @@ export default inject(
 
       /**
        * 嵌套树分批加载状态：
-       * - dsListPageInfoRef：当前项目数据源列表已加载到的 (page, totalPages)；
+       * - dsListPageInfoRef：当前项目数据源列表已加载到的 (page, size, totalPages)；
        * - dsDbPageInfoRef：每个数据源下库列表已加载到的 (page, totalPages)，按 datasourceId 索引；
        * - loadMoreLoadingKeys：正在加载中的哨兵节点 key 集合，用于渲染 loading 态并防重复点击。
        */
@@ -269,7 +278,16 @@ export default inject(
           return {
             reload() {
               if (view === 'datasourceList' && selectedProject?.id) {
-                return loadProjectDatasources(selectedProject.id);
+                /**
+                 * 刷新当前页（保留页码与每页条数），不回退到第一页。
+                 */
+                const info = dsListPageInfoRef.current;
+                const sameProject = info?.projectId === selectedProject.id;
+                return loadProjectDatasources(
+                  selectedProject.id,
+                  sameProject ? info.page : 1,
+                  sameProject ? info.size : PROJECT_DS_PAGE_SIZE,
+                );
               }
               return fetchProjects(projPageInfo.current, projPageInfo.size, searchKey);
             },
@@ -279,11 +297,16 @@ export default inject(
         [view, selectedProject, projPageInfo, searchKey],
       );
 
-      async function loadProjectDatasources(projectId: number) {
+      async function loadProjectDatasources(
+        projectId: number,
+        page: number = 1,
+        size: number = PROJECT_DS_PAGE_SIZE,
+        name: string = dsSearchKey,
+      ) {
         setDsLoading(true);
         setEntrySeq((s) => s + 1);
         /**
-         * 进入（或刷新）项目时，丢弃该项目所有历史 stateId 的树状态缓存（expandedKeys/
+         * 进入（或刷新、翻页）项目时，丢弃该项目所有历史 stateId 的树状态缓存（expandedKeys/
          * loadedKeys）。rc-tree 的 loadData 仅在 key 不在 loadedKeys 时触发；若上一次访问
          * 残留的 loadedKeys（如 ds-<datasourceId>）被复用，再次展开数据源将不会重新拉取
          * 数据库，表现为"数据源展开后不显示数据库"。这里在加载新数据源列表前清掉所有
@@ -300,29 +323,30 @@ export default inject(
         }
         try {
           /**
-           * 改为分批加载：首页只拉 PROJECT_DS_PAGE_SIZE 条；若还有更多页，在末尾插入
-           * "加载更多"哨兵节点，点击后拉取下一页并追加（见 loadMoreProjectDatasources）。
+           * 服务端分页整页替换：按 (page, size) 拉取当前页并以后端返回的 page 元数据
+           * （totalElements/totalPages）驱动页脚分页器；搜索走服务端 name 参数，搜索时
+           * 重置回第一页。数据源下的数据库列表仍保留"加载更多"哨兵按需追加（见
+           * loadMoreDatasourceDatabases）。
            */
           const data = await getConnectionList({
             projectId,
-            page: 1,
-            size: PROJECT_DS_PAGE_SIZE,
+            page,
+            size,
+            name: name || undefined,
           });
           const contents = data?.contents || [];
           const totalPages = data?.page?.totalPages ?? (contents.length ? 1 : 0);
+          const total = data?.page?.totalElements ?? 0;
           dsListPageInfoRef.current = {
             projectId,
-            page: 1,
-            size: PROJECT_DS_PAGE_SIZE,
+            page,
+            size,
             totalPages,
           };
+          setDsPageInfo({ current: page, size, total, totalPages });
           setDatasources(contents);
           dataSourceStatusStore?.asyncUpdateStatus(contents?.map((a) => a.id));
-          const nodes = contents.map(datasourceToNode);
-          if (1 < totalPages) {
-            nodes.push(makeLoadMoreNode(LM_PROJECT_PREFIX + projectId));
-          }
-          setTreeData(nodes);
+          setTreeData(contents.map(datasourceToNode));
         } catch (e) {
           message.error(
             formatMessage({
@@ -332,55 +356,6 @@ export default inject(
           );
         } finally {
           setDsLoading(false);
-        }
-      }
-
-      /**
-       * 点击"项目数据源加载更多"哨兵：拉取下一页并追加到数据源列表，按需重新挂回哨兵。
-       */
-      async function loadMoreProjectDatasources() {
-        const info = dsListPageInfoRef.current;
-        if (!info) {
-          return;
-        }
-        const lmKey = LM_PROJECT_PREFIX + info.projectId;
-        if (loadMoreLoadingKeys.has(lmKey)) {
-          return;
-        }
-        setLoadMoreLoadingKeys((prev) => new Set(prev).add(lmKey));
-        try {
-          const nextPage = info.page + 1;
-          const data = await getConnectionList({
-            projectId: info.projectId,
-            page: nextPage,
-            size: info.size,
-          });
-          const contents = data?.contents || [];
-          dsListPageInfoRef.current = { ...info, page: nextPage };
-          setDatasources((prev) => [...prev, ...contents]);
-          dataSourceStatusStore?.asyncUpdateStatus(contents?.map((a) => a.id));
-          const newNodes = contents.map(datasourceToNode);
-          setTreeData((prev) => {
-            const withoutLm = prev.filter((n) => n.key !== lmKey);
-            const merged = [...withoutLm, ...newNodes];
-            if (nextPage < info.totalPages) {
-              merged.push(makeLoadMoreNode(lmKey));
-            }
-            return merged;
-          });
-        } catch (e) {
-          message.error(
-            formatMessage({
-              id: 'odc.ResourceTree.Datasource.FailedToLoad',
-              defaultMessage: '加载数据源失败',
-            }),
-          );
-        } finally {
-          setLoadMoreLoadingKeys((prev) => {
-            const next = new Set(prev);
-            next.delete(lmKey);
-            return next;
-          });
         }
       }
 
@@ -444,12 +419,11 @@ export default inject(
       }
 
       /**
-       * "加载更多"哨兵点击分发：按 key 前缀决定拉取项目数据源下一页还是某数据源下库下一页。
+       * "加载更多"哨兵点击分发：按 key 前缀拉取某数据源下库的下一页。
+       * （项目数据源列表已改为页脚分页器翻页，不再使用哨兵。）
        */
       function handleLoadMore(key: string) {
-        if (key.startsWith(LM_PROJECT_PREFIX)) {
-          loadMoreProjectDatasources();
-        } else if (key.startsWith(LM_DS_PREFIX)) {
+        if (key.startsWith(LM_DS_PREFIX)) {
           const datasourceId = Number(key.replace(LM_DS_PREFIX, ''));
           if (!Number.isNaN(datasourceId)) {
             loadMoreDatasourceDatabases(datasourceId);
@@ -473,6 +447,7 @@ export default inject(
         setDatasources([]);
         setTreeData([]);
         setDsSearchKey('');
+        setDsPageInfo({ current: 1, size: PROJECT_DS_PAGE_SIZE, total: 0, totalPages: 0 });
         autoEnterDoneRef.current = null;
         /**
          * 返回项目列表时清掉一次性信号，避免残留。
@@ -599,7 +574,8 @@ export default inject(
            * 数据库子节点尚未加载：不再展开所有数据源（会对每个数据源发一次
            * /api/v2/database/databases 请求，N 个数据源就是 N 次扇出），而是用一次
            * listDatabases(projectId) 拉取整个项目的全部库，找到目标库所属数据源后只把
-           * 该数据源的子节点填入并展开，把 N 次请求降为 1 次。
+           * 该数据源的子节点填入并展开，把 N 次请求降为 1 次。数据源列表分页后目标
+           * 数据源可能不在当前页，此时切换到其所在页（见下方实现）。
            *
            * 跨项目定位时（autoEnterProjectId 指向另一个项目），必须等 enterProject 把
            * selectedProject 切换到目标项目后再拉取——否则会用旧项目的 id 拉取，目标库不在
@@ -641,6 +617,49 @@ export default inject(
               });
               const targetDb = allDatabases.find((db) => db.id === currentDatabaseId);
               const targetDsId = targetDb?.dataSource?.id;
+              /**
+               * 数据源列表已分页显示，目标数据源可能不在当前页（treeData 里没有 ds-<id>
+               * 节点），下方按数据源填子节点对它无效、定位会落空。这里逐页查找目标数据源
+               * 所在页（跳过当前页），找到后整页切换过去并同步页脚分页器，再由下方逻辑
+               * 填子节点并展开。setTreeData 为函数式更新、按提交顺序执行，下方填子节点的
+               * map 一定作用于切换后的节点。
+               */
+              if (targetDsId != null && !treeData.some((node) => node.key === `ds-${targetDsId}`)) {
+                const pageInfo = dsListPageInfoRef.current;
+                if (pageInfo?.projectId === targetProjectId) {
+                  /**
+                   * 搜索词可能把目标数据源过滤掉，跳页定位前先清空。
+                   */
+                  if (dsSearchKey) {
+                    setDsSearchKey('');
+                  }
+                  for (let p = 1; p <= pageInfo.totalPages; p++) {
+                    if (p === pageInfo.page) {
+                      continue;
+                    }
+                    const res = await getConnectionList({
+                      projectId: pageInfo.projectId,
+                      page: p,
+                      size: pageInfo.size,
+                    });
+                    const items = res?.contents || [];
+                    if (items.some((d) => d.id === targetDsId)) {
+                      const totalPages = res?.page?.totalPages ?? pageInfo.totalPages;
+                      dsListPageInfoRef.current = { ...pageInfo, page: p, totalPages };
+                      setDsPageInfo({
+                        current: p,
+                        size: pageInfo.size,
+                        total: res?.page?.totalElements ?? 0,
+                        totalPages,
+                      });
+                      setDatasources(items);
+                      dataSourceStatusStore?.asyncUpdateStatus(items.map((a) => a.id));
+                      setTreeData(items.map(datasourceToNode));
+                      break;
+                    }
+                  }
+                }
+              }
               setTreeData((prev) =>
                 prev.map((node) => {
                   if (node.type !== ResourceNodeType.Datasource || node.children?.length) {
@@ -739,16 +758,18 @@ export default inject(
       }, [projPage]);
 
       /**
-       * 数据源列表视图下按 dsSearchKey 过滤。
+       * 服务端搜索（name 参数）之外，再对当前页做客户端包含匹配兜底：后端未实现
+       * name 过滤时搜索仍有即时反馈；后端已实现时两端结果一致，客户端过滤为空操作。
        */
       const filteredTreeData = useMemo(() => {
         if (view !== 'datasourceList' || !dsSearchKey) {
           return treeData;
         }
+        const key = dsSearchKey.toLowerCase();
         return treeData.filter((node) =>
           String(node.title ?? '')
             .toLowerCase()
-            .includes(dsSearchKey.toLowerCase()),
+            .includes(key),
         );
       }, [treeData, dsSearchKey, view]);
 
@@ -1127,17 +1148,26 @@ export default inject(
               <div className={styles.search}>
                 <Input.Search
                   allowClear
+                  value={dsSearchKey}
                   onChange={(e) => {
                     /**
-                     * 同项目列表搜索：清空输入时重置过滤条件（此处的数据源过滤为客户端
-                     * memo，仅清 searchKey 即可恢复全部）。
+                     * 受控输入：清空（allowClear 的 X 或退格删完）时重置回第一页并
+                     * 恢复未过滤列表，与服务端搜索配套（同项目列表视图）。
                      */
-                    if (!e.target.value && dsSearchKey) {
-                      setDsSearchKey('');
+                    const v = e.target.value;
+                    setDsSearchKey(v);
+                    if (!v && selectedProject?.id) {
+                      loadProjectDatasources(selectedProject.id, 1, dsPageInfo.size, '');
                     }
                   }}
                   onSearch={(v) => {
+                    /**
+                     * 服务端搜索：重置到第一页并带 name 重新拉取。
+                     */
                     setDsSearchKey(v);
+                    if (selectedProject?.id) {
+                      loadProjectDatasources(selectedProject.id, 1, dsPageInfo.size, v);
+                    }
                   }}
                   placeholder={formatMessage({
                     id: 'odc.ResourceTree.Datasource.SearchForDataSources',
@@ -1171,6 +1201,23 @@ export default inject(
                   )}
                 </Spin>
               </div>
+              {dsPageInfo.total > 0 && (
+                <div className={styles.pagination}>
+                  <Pagination
+                    size="small"
+                    current={dsPageInfo.current}
+                    total={dsPageInfo.total}
+                    pageSize={dsPageInfo.size}
+                    showSizeChanger
+                    pageSizeOptions={[10, 20, 50]}
+                    onChange={(page, pageSize) => {
+                      if (selectedProject?.id) {
+                        loadProjectDatasources(selectedProject.id, page, pageSize);
+                      }
+                    }}
+                  />
+                </div>
+              )}
               <NewDatasourceDrawer
                 isEdit={!!editDatasourceId}
                 visible={addDSVisiable}
