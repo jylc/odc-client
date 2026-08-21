@@ -105,8 +105,11 @@ export interface IUnauthorizedDatabase {
   id: number;
   // 数据库名称
   name: string;
-  project: IProject;
-  dataSource: IDatasource;
-  environment: IEnvironment;
-  applicable: boolean;
+  project?: IProject;
+  dataSource?: IDatasource;
+  /**
+   * /sqls/streamExecute 的 unauthorizedDBResources 为扁平结构，不含 environment。
+   */
+  environment?: IEnvironment;
+  applicable?: boolean;
 }

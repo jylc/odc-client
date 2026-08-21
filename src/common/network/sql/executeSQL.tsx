@@ -17,12 +17,14 @@
 import { ISQLLintReuslt } from '@/component/SQLLintResult/type';
 import type { ISqlExecuteResult } from '@/d.ts';
 import { EStatus, ISqlExecuteResultStatus } from '@/d.ts';
-import { IUnauthorizedDatabase } from '@/d.ts/database';
+import type { DatabasePermissionType, IUnauthorizedDatabase } from '@/d.ts/database';
+import type { IDatasource } from '@/d.ts/datasource';
+import type { IProject } from '@/d.ts/project';
 import { IRule } from '@/d.ts/rule';
 import modal from '@/store/modal';
 import sessionManager from '@/store/sessionManager';
 import request from '@/util/request';
-import { generateDatabaseSid, generateSessionSid } from '../pathUtil';
+import { generateDatabaseSid } from '../pathUtil';
 
 export interface IExecuteSQLParams {
   sql: string;
@@ -45,11 +47,47 @@ export interface ISQLExecuteTaskSQL {
   };
   violatedRules: IRule[];
 }
+/**
+ * /sqls/streamExecute 响应中的未授权库/表资源（扁平结构），见后端 UnauthorizedDBResource。
+ */
+export interface IUnauthorizedDBResource {
+  type?: string;
+  dialectType?: string;
+  dataSourceId?: number;
+  dataSourceName?: string;
+  databaseId?: number;
+  databaseName?: string;
+  tableId?: number;
+  tableName?: string;
+  applicable?: boolean;
+  unauthorizedPermissionTypes?: DatabasePermissionType[];
+  projectId?: number;
+}
 export interface ISQLExecuteTask {
   requestId: string;
   sqls: ISQLExecuteTaskSQL[];
   violatedRules: IRule[];
-  unauthorizedDatabases: IUnauthorizedDatabase[];
+  unauthorizedDBResources?: IUnauthorizedDBResource[];
+  /**
+   * 是否逻辑库 SQL
+   */
+  logicalSql?: boolean;
+  /**
+   * 是否需要走审批流
+   */
+  approvalRequired?: boolean;
+}
+/**
+ * /sqls/getMoreResults 的响应（流式分批）：results 为本批增量结果，finished 表示全部返回。
+ */
+interface IAsyncExecuteResultResp {
+  results?: ISqlExecuteResult[];
+  traceId?: string;
+  sqlId?: string;
+  total?: number;
+  count?: number;
+  finished?: boolean;
+  sql?: string;
 }
 
 /**
@@ -72,20 +110,28 @@ class Task {
   public taskLoopInterval = 200;
   private timer = null;
   private isStop = false;
-  constructor(public requestId: string, public sessionId: string) {}
+  /**
+   * 已累积的增量结果：getMoreResults 每批只返回新增部分，需累积到 finished。
+   */
+  private accumulatedResults: ISqlExecuteResult[] = [];
+  constructor(
+    public requestId: string,
+    public sessionId: string,
+    /**
+     * 与 streamExecute 一致的 database sid，保证有状态路由命中同一节点。
+     */
+    private dbSid: string,
+  ) {}
   private fetchData = async () => {
-    const res = await request.get(
-      `/api/v2/datasource/sessions/${generateSessionSid(this.sessionId)}/sqls/getResult`,
-      {
-        params: {
-          requestId: this.requestId,
-        },
+    const res = await request.get(`/api/v2/datasource/sessions/${this.dbSid}/sqls/getMoreResults`, {
+      params: {
+        requestId: this.requestId,
       },
-    );
+    });
     if (res?.isError) {
       throw new Error(res?.errMsg);
     }
-    return res?.data;
+    return res?.data as IAsyncExecuteResultResp;
   };
   public getResult = async (): Promise<ISqlExecuteResult[]> => {
     return new Promise((resolve, reject) => {
@@ -99,8 +145,11 @@ class Task {
     }
     try {
       const data = await this.fetchData();
-      if (data?.length) {
-        callback(data);
+      if (data?.results?.length) {
+        this.accumulatedResults = this.accumulatedResults.concat(data.results);
+      }
+      if (data?.finished) {
+        callback(this.accumulatedResults);
       } else {
         this.timer = setTimeout(() => {
           this.taskLoopInterval = Math.min(3000, this.taskLoopInterval + 500);
@@ -134,8 +183,12 @@ class TaskManager {
     });
     this.tasks = this.tasks.filter(Boolean);
   }
-  public async addAndWaitTask(requestId: string, sessionId: string): Promise<ISqlExecuteResult[]> {
-    const task = new Task(requestId, sessionId);
+  public async addAndWaitTask(
+    requestId: string,
+    sessionId: string,
+    dbSid: string,
+  ): Promise<ISqlExecuteResult[]> {
+    const task = new Task(requestId, sessionId, dbSid);
     this.tasks.push(task);
     try {
       const result = await task.getResult();
@@ -162,17 +215,19 @@ export default async function executeSQL(
   needModal: boolean = true,
 ): Promise<IExecuteTaskResult> {
   const sid = generateDatabaseSid(dbName, sessionId);
+  /**
+   * v2 契约（ConnectSessionController）：sessionId 携带在路径上，请求体 SqlAsyncExecuteReq
+   * 不含 sid 字段。
+   */
   const serverParams =
     typeof params === 'string'
       ? {
-          sid,
           sql: params,
         }
       : {
-          sid,
           ...params,
         };
-  const res = await request.post(`/api/v2/datasource/sessions/${sid}/sqls/asyncExecute`, {
+  const res = await request.post(`/api/v2/datasource/sessions/${sid}/sqls/streamExecute`, {
     data: serverParams,
   });
   const taskInfo: ISQLExecuteTask = res?.data;
@@ -189,7 +244,23 @@ export default async function executeSQL(
     }
     return pre;
   }, []);
-  const unauthorizedDatabases = taskInfo?.unauthorizedDatabases;
+  /**
+   * 新契约返回扁平的 unauthorizedDBResources，这里适配为页面仍在使用的
+   * IUnauthorizedDatabase 结构（DBPermissionTable 需要 name/dataSource.name/
+   * unauthorizedPermissionTypes/applicable/project.id/id）。
+   */
+  const unauthorizedDatabases: IUnauthorizedDatabase[] = (
+    taskInfo?.unauthorizedDBResources || []
+  ).map((item) => ({
+    id: item?.databaseId,
+    name: item?.databaseName,
+    applicable: item?.applicable,
+    unauthorizedPermissionTypes: item?.unauthorizedPermissionTypes || [],
+    project: (item?.projectId != null ? { id: item.projectId } : null) as IProject,
+    dataSource: (item?.dataSourceId != null
+      ? { id: item.dataSourceId, name: item.dataSourceName }
+      : null) as IDatasource,
+  }));
   const violatedRules = rootViolatedRules.concat(taskInfo?.sqls);
   if (unauthorizedDatabases?.length) {
     // 无权限库
@@ -260,7 +331,7 @@ export default async function executeSQL(
   if (!requestId || !sqls?.length) {
     return null;
   }
-  let results = await executeTaskManager.addAndWaitTask(requestId, sessionId);
+  let results = await executeTaskManager.addAndWaitTask(requestId, sessionId, sid);
   results = results?.map((result) => {
     if (!result.requestId) {
       result.requestId = requestId;
