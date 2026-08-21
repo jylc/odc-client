@@ -70,6 +70,13 @@ export default function useColumns(
          */
         editable: !column.readonly && isColumnEditable(column.columnType) && !isNlsAndMasked,
         editor: getEditor(column.columnType, dbMode),
+        /**
+         * 开启 clickable 使"已选中单元格上的再一次 click（mouseup）"直接进入编辑，
+         * 不再依赖浏览器合成的 dblclick 事件：低性能机器/远程桌面下两次点击间隔
+         * 被拉长超过系统双击阈值时 dblclick 不触发，表现为双击打不开编辑器。
+         * 非可编辑单元格由网格的 isSelectedRangeEditable 保护，不会误开编辑器。
+         */
+        clickable: true,
         formatter: getCellFormatter(column.columnType, enableEdit, supportBlob, dbMode),
       };
     });
