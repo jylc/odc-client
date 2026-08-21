@@ -49,11 +49,18 @@ export async function getScript(scriptId: ScriptId): Promise<IScript> {
 export async function newScript(
   files: File[],
   openApiName?: string,
+  databaseId?: number,
 ): Promise<IScriptMeta[] | null> {
   const formData = new FormData();
   files.forEach((file) => {
     formData.append('file', file, file.name);
   });
+  if (databaseId != null) {
+    /**
+     * 记录脚本来源的数据库 id，重新打开脚本时用于恢复数据源上下文
+     */
+    formData.append('databaseId', String(databaseId));
+  }
   if (setting.isUploadCloudStore) {
     const result = await uploadFileToOSS(files?.[0], openApiName, null);
     return result?.contents;
@@ -103,11 +110,13 @@ export async function updateScript(
   scriptId: ScriptId,
   content: string,
   name: string,
+  databaseId?: number,
 ): Promise<IScriptMeta | null> {
   const res = await request.put(`/api/v2/script/scripts/${scriptId}`, {
     data: {
       name,
       content,
+      ...(databaseId != null && { databaseId }),
     },
   });
 

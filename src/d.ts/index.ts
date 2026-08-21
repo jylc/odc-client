@@ -3567,6 +3567,11 @@ export interface IScriptMeta {
    */
   scriptAbstract: string;
   contentLength: number;
+  /**
+   * 保存脚本时关联的数据库 id（connect_database），用于重新打开脚本时恢复
+   * 数据源/数据库上下文
+   */
+  databaseId?: number;
 }
 
 export interface IScript {

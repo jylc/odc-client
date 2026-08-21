@@ -504,8 +504,13 @@ export class SQLPage extends Component<IProps, ISQLPageState> {
 
     try {
       if (params.scriptId) {
-        // 仅更新 SQL 内容
-        const file = await updateScript(params.scriptId, params.scriptText, params.objectName);
+        // 仅更新 SQL 内容；携带当前数据库 id，同步脚本关联的数据源上下文
+        const file = await updateScript(
+          params.scriptId,
+          params.scriptText,
+          params.objectName,
+          this.getSession()?.odcDatabase?.id ?? params?.cid,
+        );
 
         if (file) {
           message.success(
@@ -542,6 +547,7 @@ export class SQLPage extends Component<IProps, ISQLPageState> {
     const newFiles = await newScript(
       [new File([params.scriptText], script.objectName)],
       'UploadScript',
+      this.getSession()?.odcDatabase?.id ?? params?.cid,
     );
 
     const newFile = newFiles?.[0];

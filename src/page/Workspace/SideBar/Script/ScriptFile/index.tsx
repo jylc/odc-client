@@ -98,7 +98,11 @@ export default inject('userStore')(
                     name={script.objectName}
                     script={script}
                     onClick={() => {
-                      openSQLPageByScript(script.id, null);
+                      /**
+                       * 优先用脚本保存时关联的数据库 id 打开，恢复数据源上下文；
+                       * 未关联（旧脚本/保存时无库）时退回为不带库打开。
+                       */
+                      openSQLPageByScript(script.id, script.databaseId ?? null);
                     }}
                     editFile={() => {
                       setEditingScriptId(script.id);
