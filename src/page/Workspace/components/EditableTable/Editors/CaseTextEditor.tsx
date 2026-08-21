@@ -48,10 +48,10 @@ export function CaseTextEditor<T>({
     if (editorRef.current) {
       setTimeout(() => {
         editorRef.current?.focus();
-        editorRef.current?.resizableTextArea.textArea.setSelectionRange(
-          Number.MAX_SAFE_INTEGER,
-          Number.MAX_SAFE_INTEGER,
-        );
+        /**
+         * 进入编辑时默认全选，输入可直接覆盖原值
+         */
+        editorRef.current?.resizableTextArea.textArea.select();
       }, 100);
     }
   }, [editorRef]);

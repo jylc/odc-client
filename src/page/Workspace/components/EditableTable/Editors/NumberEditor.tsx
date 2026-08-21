@@ -29,7 +29,10 @@ export function InputNumberEditor<T>({ row, onRowChange, column, width }: Editor
     if (editorRef.current) {
       setTimeout(() => {
         editorRef.current?.focus();
-        editorRef.current?.setSelectionRange(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER);
+        /**
+         * 进入编辑时默认全选，输入可直接覆盖原值
+         */
+        editorRef.current?.select();
       }, 100);
     }
   }, [editorRef]);
