@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { formatMessage } from '@/util/intl';
-import { Badge, Input, Popover, Select, Space, Spin, Tooltip, Tree } from 'antd';
+import { Input, Popover, Select, Space, Spin, Tag, Tooltip, Tree } from 'antd';
 import React, { Key, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import styles from './index.less';
 import Icon, { SearchOutlined } from '@ant-design/icons';
@@ -52,7 +52,7 @@ const DatabasesTitle: React.FC<IDatabasesTitleProps> = (props) => {
   const { taskType, db, disabled } = props;
   const task = TaskTypeMap?.[taskType] || '';
   return (
-    <>
+    <div className={styles.databaseTitle}>
       {disabled ? (
         <Tooltip
           placement={'right'}
@@ -76,9 +76,23 @@ const DatabasesTitle: React.FC<IDatabasesTitleProps> = (props) => {
           <div className={styles.textoverflow}>{db.name}</div>
         </Popover>
       )}
-
-      <Badge color={EnvColorMap[db?.environment?.style?.toUpperCase()]?.tipColor} />
-    </>
+      {/*
+       * 环境以文字标签展示，样式与悬浮连接信息弹窗（ConnectionPopover 中的
+       * RiskLevelLabel）一致：EnvColorMap 的背景色与文字色；标签与库名同行，
+       * 并固定在整行的最右侧。
+       */}
+      <Tag
+        className={styles.envTag}
+        style={{
+          background: EnvColorMap[db?.environment?.style?.toUpperCase()]?.background,
+          color: EnvColorMap[db?.environment?.style?.toUpperCase()]?.textColor,
+          border: 'none',
+        }}
+        color={''}
+      >
+        {db?.environment?.name ?? db?.environment?.style}
+      </Tag>
+    </div>
   );
 };
 export interface ISessionDropdownFiltersProps {

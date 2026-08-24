@@ -10,6 +10,20 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .databaseTitle {
+    display: flex;
+    align-items: center;
+    width: 100%;
+
+    .textoverflow {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+  .envTag {
+    flex-shrink: 0;
+    margin: 0 0 0 8px;
+  }
   :global {
     .ant-tree-treenode {
       width: 100%;
@@ -26,15 +40,6 @@
         text-overflow: ellipsis;
         white-space: nowrap;
         padding-right: 8px;
-      }
-    }
-
-    .ant-badge {
-      position: absolute;
-      right: 4px;
-      top: 0px;
-      .ant-badge-status-dot {
-        border-radius: 0px;
       }
     }
   }
