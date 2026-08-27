@@ -251,6 +251,21 @@ export default inject(
        * 避免依赖变化时重复触发"全部刷新"。backToProjectList 时清空，再次进入仍会刷新。
        */
       const autoEnterDoneRef = useRef<{ projectId: number; requestId: number }>(null);
+      /**
+       * 已处理过的定位请求签名 `${currentDatabaseId}|${locateRequestId}|${autoEnter...}`。
+       * 定位是一次性 action：完成后 currentDatabaseId 仍保留在 context（供选中高亮），若
+       * 不记录签名，之后任何 treeData 变化都会重跑定位 effect——用户翻页时整页替换后的
+       * 树里没有目标库子节点，effect 会再次全量拉库并把列表强制切回目标数据源所在页，
+       * 表现为"定位过一次后无法切换页码"。签名相同则跳过；只有再次点击定位按钮
+       * （locateRequestId 自增）、换库或新的深链进入（autoEnterRequestId 自增）才重新定位。
+       */
+      const locatedSignatureRef = useRef<string>(null);
+      /**
+       * 异步定位最终落地的列表页码（定位可能切页到目标数据源所在页）。用于区分
+       * "定位结果被同一点击触发的整页重置清掉"（当前页仍等于落点页，需要重新定位
+       * 填充）与"用户翻到了其他页"（不得重新定位，否则会被吸回落点页）。
+       */
+      const locatedPageRef = useRef<number>(null);
       const { expandedKeys, loadedKeys, onExpand, onLoad, setExpandedKeys } = useTreeState(
         stateId,
         {
@@ -346,7 +361,18 @@ export default inject(
           setDsPageInfo({ current: page, size, total, totalPages });
           setDatasources(contents);
           dataSourceStatusStore?.asyncUpdateStatus(contents?.map((a) => a.id));
-          setTreeData(contents.map(datasourceToNode));
+          /**
+           * 整页替换时按 key 保留已加载的子节点（库列表）：定位点击会同时触发"异步定位
+           * 填充目标数据源子节点"与本函数的整页刷新，二者完成顺序不定，若刷新后落地会
+           * 清掉刚填充的子节点；翻页往返时保留子节点也避免展开状态下的重复拉取。
+           */
+          setTreeData((prev) =>
+            contents.map((ds) => {
+              const fresh = datasourceToNode(ds);
+              const old = prev.find((n) => n.key === fresh.key);
+              return old?.children?.length ? { ...fresh, children: old.children } : fresh;
+            }),
+          );
         } catch (e) {
           message.error(
             formatMessage({
@@ -537,6 +563,44 @@ export default inject(
           return;
         }
         /**
+         * 同一次定位（同库、同定位序号、同深链序号）只执行一次；后续 treeData 变化
+         * （翻页、刷新、搜索等整页替换）不再重新触发，否则翻页会被强制切回目标数据源
+         * 所在页。签名在两个分支的入口处记录（见下方），保证任何路径收尾后门卫都已武装。
+         */
+        const locateSignature = `${currentDatabaseId}|${locateRequestId}|${
+          autoEnterProjectId ?? '-'
+        }.${autoEnterRequestId ?? '-'}`;
+        if (locatedSignatureRef.current === locateSignature) {
+          /**
+           * 该签名已定位过，按目标库子节点的去向分三种情况：
+           * - 子节点仍在当前树中但被收起（典型竞态：定位点击同时触发的项目列表整页
+           *   刷新在定位填充之后落地，entrySeq 自增重置了展开状态）——仅重新展开该
+           *   数据源，不重新拉取、不切页；
+           * - 子节点不在当前树，且当前页码仍等于定位落点页——定位填充被同一点击
+           *   触发的 enterProject 整页重置清掉的竞态（或用户翻回了落点页），放行
+           *   重跑异步定位重新填充并展开。目标数据源必在当前页，下方页扫描不会触发；
+           * - 子节点不在当前树，且页码不同（用户翻到了其他页）——不动作，确保翻页
+           *   不会被吸回目标数据源所在页。
+           */
+          const dsNode = treeData.find((node) =>
+            node.children?.some((child) => child.key === currentDatabaseId),
+          );
+          if (dsNode) {
+            if (!expandedKeysRef.current.includes(dsNode.key)) {
+              setExpandedKeys([...expandedKeysRef.current, dsNode.key]);
+            }
+            return;
+          }
+          const pageInfo = dsListPageInfoRef.current;
+          if (
+            !pageInfo ||
+            pageInfo.page !== locatedPageRef.current ||
+            pageInfo.projectId !== (autoEnterProjectId || selectedProject?.id)
+          ) {
+            return;
+          }
+        }
+        /**
          * 在 treeData 中查找：哪个数据源节点下已有目标数据库子节点（loadData 已完成）。
          */
         let datasourceNode = null;
@@ -548,9 +612,11 @@ export default inject(
         }
         if (datasourceNode) {
           /**
-           * 数据库子节点已加载：确保数据源展开（收起后再次定位时重新展开）并滚动到目标库。
-           * 通过 expandedKeysRef 读最新值（不把 expandedKeys 放进依赖，避免收起即被重展开）。
+           * 本次定位到此完成（含异步定位收尾后的重跑），记录签名阻止后续 treeData 变化
+           * 重跑；随后确保数据源展开并滚动到目标库。
            */
+          locatedSignatureRef.current = locateSignature;
+          locatedPageRef.current = dsListPageInfoRef.current?.page ?? 1;
           const keys = [...expandedKeysRef.current];
           if (!keys.includes(datasourceNode.key)) {
             keys.push(datasourceNode.key);
@@ -588,6 +654,15 @@ export default inject(
             return;
           }
           locateLocatingRef.current = currentDatabaseId;
+          /**
+           * 异步定位发起时即记录签名。定位过程中的 treeData 变化由 locateLocatingRef
+           * 拦截；收尾后的重跑由本签名拦截。若只在"子节点已存在"的同步分支记录，异步
+           * 分支结束后不再有 treeData 变化驱动 effect 重跑去记录签名——签名永远为空，
+           * 之后任何翻页（整页替换 treeData）都会重新触发异步定位，并把列表强行切回
+           * 目标数据源所在页，即"定位后无法切换页码"。失败后如需重试，再次点击定位即可
+           * （locateRequestId 自增产生新签名）。
+           */
+          locatedSignatureRef.current = locateSignature;
           (async () => {
             try {
               const res = await listDatabases(
@@ -678,6 +753,11 @@ export default inject(
                   };
                 }),
               );
+              /**
+               * 记录定位落点页（页扫描可能已切换到目标数据源所在页），供门卫区分
+               * "定位结果被整页重置清掉需重跑"与"用户翻到其他页不得吸回"。
+               */
+              locatedPageRef.current = dsListPageInfoRef.current?.page ?? 1;
               /**
                * 把已填好子节点的数据源标记为 loaded（避免再次展开时 rc-tree 重复触发
                * loadData），并展开目标数据源。直接用 setExpandedKeys 显式展开目标，不依赖
