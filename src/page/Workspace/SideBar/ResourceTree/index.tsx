@@ -106,9 +106,13 @@ const ResourceTree: React.FC<IProps> = function ({
   const { tabKey } = useParams<{ tabKey: string }>();
   const update = useUpdate();
   const [wrapperHeight, setWrapperHeight] = useState(0);
+  /**
+   * 搜索词。type 为空表示不限定对象类型——输入即直接在表、视图、函数等全部类型中
+   * 筛选（对象类型下拉选择已移除）；value 为空表示未在搜索。
+   */
   const [searchValue, setSearchValue] = useState<{
-    type: DbObjectType;
-    value: string;
+    type?: DbObjectType;
+    value?: string;
   }>(null);
 
   const [envs, setEnvs] = useState<number[]>([]);
@@ -380,7 +384,7 @@ const ResourceTree: React.FC<IProps> = function ({
       /**
        * 懒加载模式：直接用 lazyTreeData。内联搜索仅过滤"已加载"节点（降级，Ctrl+J 全局搜索走服务端）。
        */
-      if (searchValue?.type === DbObjectType.database && searchValue?.value) {
+      if (searchValue?.value) {
         const kw = searchValue.value.toLowerCase();
         const filterNodes = (nodes: TreeDataNode[]): TreeDataNode[] =>
           nodes
@@ -406,7 +410,12 @@ const ResourceTree: React.FC<IProps> = function ({
     const filteredDatabases =
       databases?.filter((db) => {
         if (
-          searchValue?.type === DbObjectType.database &&
+          /**
+           * 按库名过滤仅用于多库列表（侧边栏）；SQL 编辑器内嵌树（flattenDatabase）
+           * 只绑定单个库，按对象关键词过滤库名会把唯一的库过滤掉导致树被清空。
+           */
+          !flattenDatabase &&
+          searchValue?.value &&
           !db.name.toLowerCase()?.includes(searchValue?.value?.toLowerCase())
         ) {
           /**
@@ -467,6 +476,29 @@ const ResourceTree: React.FC<IProps> = function ({
 
     return buildDatabaseNodes(filteredDatabases);
   })();
+
+  /**
+   * 输入搜索词后自动展开数据库与对象类型根节点（表/视图/函数…）：折叠状态的子节点不
+   * 渲染，筛选结果不可见；展开未加载的类型根还会触发 rc-tree 的懒加载，加载完成后
+   * treeData 重建会对新载入的子节点再次过滤。仅在搜索时追加 keys，不收起用户已展开
+   * 的其它节点。flattenDatabase（编辑器内嵌树）顶层即对象类型根，只展开第一层，避免
+   * 把所有表/视图节点全部展开。
+   */
+  useEffect(() => {
+    if (searchValue?.value) {
+      const keys = [
+        ...treeData.map((node) => node.key),
+        ...(flattenDatabase
+          ? []
+          : treeData.reduce<(string | number)[]>(
+              (acc, node) => acc.concat((node.children || []).map((child) => child.key)),
+              [],
+            )),
+      ];
+      setExpandedKeys((prev: (string | number)[]) => Array.from(new Set([...prev, ...keys])));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchValue]);
 
   const setDatabaseSelected = (key) => {
     const group = treeData.find((node) => node.children?.some((child) => child.key === key));
@@ -822,13 +854,8 @@ const ResourceTree: React.FC<IProps> = function ({
       )}
       <div className={styles.search}>
         <DatabaseSearch
-          onChange={(type, value) => {
-            !type
-              ? setSearchValue(null)
-              : setSearchValue({
-                  type,
-                  value,
-                });
+          onChange={(_, value) => {
+            setSearchValue(value ? { type: null, value } : null);
           }}
         />
       </div>

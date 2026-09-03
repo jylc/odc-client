@@ -39,7 +39,7 @@ export function DataBaseTreeData(
   database: IDatabase,
   cid: number,
   showDBTypeIcon: boolean = false,
-  searchValue: { type: DbObjectType; value: string },
+  searchValue: { type?: DbObjectType; value?: string },
 ): TreeDataNode {
   const dbName = database.name;
 
@@ -140,6 +140,35 @@ export function DataBaseTreeData(
         (triggerTreeData.children = triggerTreeData.children?.filter((item) => {
           return item.title?.toString()?.toLowerCase()?.includes(searchValue.value?.toLowerCase());
         }));
+      break;
+    }
+    default: {
+      /**
+       * 未指定对象类型（搜索框输入即筛选）：在全部对象类型的子节点中统一按关键词过滤。
+       */
+      const keyword = searchValue?.value?.toLowerCase();
+      if (!keyword) {
+        break;
+      }
+      [
+        tableTreeData,
+        viewTreeData,
+        functionTreeData,
+        procedureTreeData,
+        packageTreeData,
+        triggerTreeData,
+        typeTreeData,
+        sequenceTreeData,
+        synonymTreeData,
+        publicSynonymTreeData,
+      ].forEach((node) => {
+        if (node) {
+          //@ts-ignore
+          node.children = node.children?.filter((item) =>
+            item.title?.toString()?.toLowerCase()?.includes(keyword),
+          );
+        }
+      });
       break;
     }
   }
