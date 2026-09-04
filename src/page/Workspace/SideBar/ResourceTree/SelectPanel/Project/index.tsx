@@ -609,6 +609,11 @@ export default inject(
            *   重跑异步定位重新填充并展开。目标数据源必在当前页，下方页扫描不会触发；
            * - 子节点不在当前树，且页码不同（用户翻到了其他页）——不动作，确保翻页
            *   不会被吸回目标数据源所在页。
+           *
+           * 搜索词非空（用户正在搜索）时绝不放行重跑：搜索会整页替换 treeData 并把
+           * 页码重置回 1，与"落点页"一致而被误判为上述竞态；放行后异步定位的页扫描
+           * 分支会清空搜索词并试图切回目标数据源所在页，表现为"搜索后输入框内容被
+           * 清除"。用户显式再次点击定位（签名变化）仍会清空搜索并跳转，属定位本意。
            */
           const dsNode = treeData.find((node) =>
             node.children?.some((child) => child.key === currentDatabaseId),
@@ -623,7 +628,8 @@ export default inject(
           if (
             !pageInfo ||
             pageInfo.page !== locatedPageRef.current ||
-            pageInfo.projectId !== (autoEnterProjectId || selectedProject?.id)
+            pageInfo.projectId !== (autoEnterProjectId || selectedProject?.id) ||
+            dsSearchKey
           ) {
             return;
           }
