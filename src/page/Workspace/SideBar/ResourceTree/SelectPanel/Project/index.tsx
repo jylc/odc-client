@@ -225,6 +225,14 @@ export default inject(
         Map<number, { page: number; size: number; totalPages: number }>
       >(new Map());
       const [loadMoreLoadingKeys, setLoadMoreLoadingKeys] = useState<Set<string>>(new Set());
+      /**
+       * 数据源"输入即搜"的防抖定时器与请求序号：
+       * - 防抖（300ms）：输入停顿后自动发起服务端搜索（全量跨页命中），避免逐键请求；
+       *   回车/搜索按钮立即触发并取消挂起的定时器；
+       * - 序号：丢弃乱序返回的陈旧响应，防止旧请求后返回覆盖新结果/错误地关掉 loading。
+       */
+      const dsSearchDebounceRef = useRef<ReturnType<typeof setTimeout>>(null);
+      const dsLoadSeqRef = useRef(0);
 
       /**
        * 每项目独立 stateId，避免两个项目共享数据源/数据库 id 时 expandedKeys/loadedKeys 串。
@@ -284,6 +292,14 @@ export default inject(
        */
       useEffect(() => {
         fetchProjects(1, PROJECT_DEFAULT_PAGE_SIZE, '');
+        return () => {
+          /**
+           * 卸载时清理搜索防抖定时器，避免对已卸载组件发起请求。
+           */
+          if (dsSearchDebounceRef.current) {
+            clearTimeout(dsSearchDebounceRef.current);
+          }
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
       }, []);
 
@@ -318,6 +334,7 @@ export default inject(
         size: number = PROJECT_DS_PAGE_SIZE,
         name: string = dsSearchKey,
       ) {
+        const seq = ++dsLoadSeqRef.current;
         setDsLoading(true);
         setEntrySeq((s) => s + 1);
         /**
@@ -339,17 +356,24 @@ export default inject(
         try {
           /**
            * 服务端分页整页替换：按 (page, size) 拉取当前页并以后端返回的 page 元数据
-           * （totalElements/totalPages）驱动页脚分页器；搜索走服务端 name 参数，搜索时
-           * 重置回第一页。数据源下的数据库列表仍保留"加载更多"哨兵按需追加（见
-           * loadMoreDatasourceDatabases）。
+           * （totalElements/totalPages）驱动页脚分页器；搜索走服务端 fuzzySearchKeyword
+           * 参数（与数据源管理页一致），跨全部页命中并重置回第一页——若用 name 参数，
+           * 后端不过滤、只返回当前页未过滤数据，表现为"只能搜到当前页的数据源"。数据源
+           * 下的数据库列表仍保留"加载更多"哨兵按需追加（见 loadMoreDatasourceDatabases）。
            */
           const data = await getConnectionList({
             projectId,
             page,
             size,
-            name: name || undefined,
+            fuzzySearchKeyword: name || undefined,
           });
           const contents = data?.contents || [];
+          if (seq !== dsLoadSeqRef.current) {
+            /**
+             * 陈旧响应（输入即搜防抖下多次请求乱序返回）：丢弃，不覆盖新结果。
+             */
+            return;
+          }
           const totalPages = data?.page?.totalPages ?? (contents.length ? 1 : 0);
           const total = data?.page?.totalElements ?? 0;
           dsListPageInfoRef.current = {
@@ -374,14 +398,18 @@ export default inject(
             }),
           );
         } catch (e) {
-          message.error(
-            formatMessage({
-              id: 'odc.ResourceTree.Datasource.FailedToLoad',
-              defaultMessage: '加载数据源失败',
-            }),
-          );
+          if (seq === dsLoadSeqRef.current) {
+            message.error(
+              formatMessage({
+                id: 'odc.ResourceTree.Datasource.FailedToLoad',
+                defaultMessage: '加载数据源失败',
+              }),
+            );
+          }
         } finally {
-          setDsLoading(false);
+          if (seq === dsLoadSeqRef.current) {
+            setDsLoading(false);
+          }
         }
       }
 
@@ -838,20 +866,12 @@ export default inject(
       }, [projPage]);
 
       /**
-       * 服务端搜索（name 参数）之外，再对当前页做客户端包含匹配兜底：后端未实现
-       * name 过滤时搜索仍有即时反馈；后端已实现时两端结果一致，客户端过滤为空操作。
+       * 数据源列表直接使用服务端返回的当前页：服务端 fuzzySearchKeyword 已按全字段
+       * （名称/主机/端口/集群/租户/ID）过滤，客户端若再按名称二次过滤，会把服务端
+       * 因 host 等字段命中的数据源滤掉，出现"列表为空但分页总数非零"的不一致；
+       * 防抖窗口内短暂显示上一次查询结果即可（300ms 无感）。
        */
-      const filteredTreeData = useMemo(() => {
-        if (view !== 'datasourceList' || !dsSearchKey) {
-          return treeData;
-        }
-        const key = dsSearchKey.toLowerCase();
-        return treeData.filter((node) =>
-          String(node.title ?? '')
-            .toLowerCase()
-            .includes(key),
-        );
-      }, [treeData, dsSearchKey, view]);
+      const filteredTreeData = useMemo(() => treeData, [treeData]);
 
       /**
        * 不可变地更新 treeData 中单个节点（按 key 匹配）并重建其子树。
@@ -1231,20 +1251,31 @@ export default inject(
                   value={dsSearchKey}
                   onChange={(e) => {
                     /**
-                     * 受控输入：清空（allowClear 的 X 或退格删完）时重置回第一页并
-                     * 恢复未过滤列表，与服务端搜索配套（同项目列表视图）。
+                     * 输入即搜（300ms 防抖）：停顿后自动发起服务端搜索（fuzzySearchKeyword
+                     * 全量跨页命中），清空同样经防抖恢复未过滤列表；防抖窗口内由
+                     * filteredTreeData 对当前页做客户端过滤即时反馈。每次输入重置定时器。
                      */
                     const v = e.target.value;
                     setDsSearchKey(v);
-                    if (!v && selectedProject?.id) {
-                      loadProjectDatasources(selectedProject.id, 1, dsPageInfo.size, '');
+                    if (dsSearchDebounceRef.current) {
+                      clearTimeout(dsSearchDebounceRef.current);
                     }
+                    dsSearchDebounceRef.current = setTimeout(() => {
+                      dsSearchDebounceRef.current = null;
+                      if (selectedProject?.id) {
+                        loadProjectDatasources(selectedProject.id, 1, dsPageInfo.size, v);
+                      }
+                    }, 300);
                   }}
                   onSearch={(v) => {
                     /**
-                     * 服务端搜索：重置到第一页并带 name 重新拉取。
+                     * 回车/搜索按钮：取消挂起的防抖，立即按关键词查询（重置回第一页）。
                      */
                     setDsSearchKey(v);
+                    if (dsSearchDebounceRef.current) {
+                      clearTimeout(dsSearchDebounceRef.current);
+                      dsSearchDebounceRef.current = null;
+                    }
                     if (selectedProject?.id) {
                       loadProjectDatasources(selectedProject.id, 1, dsPageInfo.size, v);
                     }
