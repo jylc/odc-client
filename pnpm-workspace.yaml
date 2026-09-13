@@ -1,0 +1,8 @@
+allowBuilds:
+  '@swc/core': true
+  aws-sdk: false
+  core-js: false
+  core-js-pure: false
+  electron: true
+  es5-ext: false
+  esbuild: true
