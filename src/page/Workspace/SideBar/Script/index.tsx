@@ -16,13 +16,15 @@
 
 import OSSUpload from '@/component/OSSDragger/Upload';
 import login from '@/store/login';
+import modalStore from '@/store/modal';
 import setting from '@/store/setting';
 import { formatMessage } from '@/util/intl';
-import { PlusOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { getLocale } from '@umijs/max';
 import { message } from 'antd';
 import { UploadFile } from 'antd/es/upload/interface';
 import Cookies from 'js-cookie';
+import { observer } from 'mobx-react';
 import React, { useEffect, useRef, useState } from 'react';
 import SideTabs from '../components/SideTabs';
 import ScriptFile from './ScriptFile';
@@ -37,6 +39,20 @@ const Script: React.FC<{}> = function () {
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
 
   async function updateFile() {}
+
+  function openGlobalSearch() {
+    modalStore.changeDatabaseSearchModalVisible(true);
+  }
+
+  const globalSearchAction = {
+    title: formatMessage({
+      id: 'odc.SideBar.Script.GlobalSearch',
+      defaultMessage: '全局搜索',
+    }),
+    key: 'globalSearch',
+    onClick: openGlobalSearch,
+    icon: SearchOutlined,
+  };
 
   function checkImportFile(file) {
     const { size } = file;
@@ -55,6 +71,11 @@ const Script: React.FC<{}> = function () {
   useEffect(() => {
     tracert.expo('a3112.b41896.c330989');
   }, []);
+
+  // 与 Ctrl+J 全局搜索快捷键共用同一个开关配置
+  const enableGlobalSearch =
+    setting.configurations['odc.database.default.enableGlobalObjectSearch'] !== 'false';
+
   return (
     <>
       <div style={{ display: 'none', pointerEvents: 'none' }}>
@@ -108,6 +129,7 @@ const Script: React.FC<{}> = function () {
                 },
                 icon: ReloadOutlined,
               },
+              ...(enableGlobalSearch ? [globalSearchAction] : []),
             ],
 
             render() {
@@ -135,6 +157,7 @@ const Script: React.FC<{}> = function () {
                 },
                 icon: ReloadOutlined,
               },
+              ...(enableGlobalSearch ? [globalSearchAction] : []),
             ],
 
             render() {
@@ -147,4 +170,4 @@ const Script: React.FC<{}> = function () {
   );
 };
 
-export default Script;
+export default observer(Script);
