@@ -713,6 +713,16 @@ const ActionBar: React.FC<IProps> = inject(
         }
       } else {
         tools = [viewBtn];
+        // 与详情页底部下载按钮口径一致：执行成功且本人创建的导出类工单，列表内直接提供下载
+        if (
+          status === TaskStatus.EXECUTION_SUCCEEDED &&
+          isOwner &&
+          (([TaskType.EXPORT, TaskType.DATAMOCK].includes(task.type) &&
+            settingStore.enableDataExport) ||
+            task.type === TaskType.EXPORT_RESULT_SET)
+        ) {
+          tools.push(isClient() ? openLocalFolder : downloadBtn);
+        }
         if (status === TaskStatus.WAIT_FOR_EXECUTION) {
           if (isOwner) {
             const _executeBtn = { ...executeBtn };
