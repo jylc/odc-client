@@ -27,11 +27,13 @@ import { IMenuItemConfig } from '../type';
 import tracert from '@/util/tracert';
 import { getDataSourceModeConfig } from '@/common/datasource';
 import { syncObject } from '@/common/network/database';
-import { IManagerResourceType } from '@/d.ts';
+import { IManagerResourceType, TaskType } from '@/d.ts';
 import { getLocalFormatDateTime } from '@/util/utils';
 import { DBObjectSyncStatus } from '@/d.ts/database';
 import { message } from 'antd';
 import { LoadingOutlined } from '@ant-design/icons';
+import { actionTypes } from '@/component/Acess';
+import { hasExportPermission, hasChangePermission } from '../index';
 
 export const databaseMenusConfig: Partial<Record<ResourceNodeType, IMenuItemConfig[]>> = {
   [ResourceNodeType.Database]: [
@@ -74,6 +76,59 @@ export const databaseMenusConfig: Partial<Record<ResourceNodeType, IMenuItemConf
       run(session, node) {
         const database: IDatabase = node.data;
         openOBClientPage(database?.dataSource?.id, database?.id);
+      },
+    },
+    {
+      key: 'IMPORT_DATABASE',
+      text: [
+        formatMessage({
+          id: 'odc.TreeNodeMenu.config.table.Import',
+        }) /*导入*/,
+      ],
+      actionType: actionTypes.update,
+      ellipsis: true,
+      disabled: (session) => {
+        return !hasChangePermission(session);
+      },
+      isHide(session, node) {
+        const database: IDatabase = node.data;
+        const dataSourceType = session?.connection?.type || database?.dataSource?.type;
+        return (
+          !setting.enableDBImport ||
+          !getDataSourceModeConfig(dataSourceType)?.features?.task?.includes(TaskType.IMPORT)
+        );
+      },
+      run(session, node) {
+        const database: IDatabase = node.data;
+        modal.changeImportModal(true, {
+          databaseId: database?.id,
+        });
+      },
+    },
+    {
+      key: 'EXPORT_DATABASE',
+      text: [
+        formatMessage({
+          id: 'odc.TreeNodeMenu.config.table.Export',
+        }), //导出
+      ],
+      ellipsis: true,
+      disabled: (session) => {
+        return !hasExportPermission(session);
+      },
+      isHide(session, node) {
+        const database: IDatabase = node.data;
+        const dataSourceType = session?.connection?.type || database?.dataSource?.type;
+        return (
+          !setting.enableDBExport ||
+          !getDataSourceModeConfig(dataSourceType)?.features?.task?.includes(TaskType.EXPORT)
+        );
+      },
+      run(session, node) {
+        const database: IDatabase = node.data;
+        modal.changeExportModal(true, {
+          databaseId: database?.id,
+        });
       },
     },
     {
