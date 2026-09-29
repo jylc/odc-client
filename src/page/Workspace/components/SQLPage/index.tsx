@@ -40,7 +40,12 @@ import {
   IUserConfig,
 } from '@/d.ts';
 import { IUnauthorizedDatabase } from '@/d.ts/database';
-import { debounceUpdatePageScriptText, ISQLPageParams, updatePage } from '@/store/helper/page';
+import {
+  debounceUpdatePageScriptText,
+  ISQLPageParams,
+  openTableViewPage,
+  updatePage,
+} from '@/store/helper/page';
 import { SQLPage as SQLPageModel } from '@/store/helper/page/pages';
 import type { UserStore } from '@/store/login';
 import modal, { ModalStore } from '@/store/modal';
@@ -52,7 +57,7 @@ import { isConnectionModeBeMySQLType } from '@/util/connection';
 import utils, { EHighLight } from '@/util/editor';
 import { formatMessage } from '@/util/intl';
 import notification from '@/util/notification';
-import { splitSql } from '@/util/sql';
+import { getRealNameInDatabase, removeTableQuote, splitSql } from '@/util/sql';
 import { generateAndDownloadFile, getCurrentSQL } from '@/util/utils';
 import { message, Spin } from 'antd';
 import { debounce, isNil } from 'lodash';
@@ -68,6 +73,7 @@ import ExecPlan from './ExecPlan';
 import styles from './index.less';
 import setting, { SettingStore } from '@/store/setting';
 import { getKeyCodeValue } from '@/component/Input/Keymap/keycodemap';
+import { PropsTab, TopTab } from '../TablePage';
 interface ISQLPageState {
   resultHeight: number;
   initialSQL: string;
@@ -169,6 +175,7 @@ export class SQLPage extends Component<IProps, ISQLPageState> {
   private _session: SessionStore;
 
   private actions: IDisposable[];
+  private tableLinkListener: IDisposable;
   private config: Partial<IUserConfig>;
 
   constructor(props) {
@@ -265,6 +272,8 @@ export class SQLPage extends Component<IProps, ISQLPageState> {
       clearInterval(this.timer);
     }
 
+    this.tableLinkListener?.dispose();
+
     sqlStore.clear(pageKey);
     if (session) {
       executeTaskManager.stopTask(session.sessionId);
@@ -323,6 +332,15 @@ export class SQLPage extends Component<IProps, ISQLPageState> {
         keybindings: executeCurrentStatement ? [getKeyCodeValue(executeCurrentStatement)] : [],
         run: () => this.handleExecuteSelectedSQL(),
       }),
+      this.editor.addAction({
+        id: 'sql_viewTableStructure',
+        label: formatMessage({
+          id: 'odc.TreeNodeMenu.config.table.ViewTableStructure',
+        }), // 查看表结构
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.5,
+        run: () => this.handleViewTableStructure(),
+      }),
     ];
     this.config = setting.configurations;
   };
@@ -330,11 +348,135 @@ export class SQLPage extends Component<IProps, ISQLPageState> {
   public handleEditorCreated = (editor: IEditor) => {
     this.editor = editor; // 快捷键绑定
     this.bindEditorKeymap();
+    this.bindTableStructureLink();
     this.debounceHighlightSelectionLine();
     //  编辑光标位置变化事件
     this.editor.onDidChangeCursorPosition(() => {
       this.debounceHighlightSelectionLine();
     });
+  };
+
+  /**
+   * 归一化编辑器中取到的表名：选中内容可能形如 schema.table，统一取最后一段并去引号；
+   * Oracle 系方言大写化，与补全插件(ob-language/service)的口径一致。
+   */
+  private normalizeTableName = (rawName: string): string => {
+    const session = this.getSession();
+    const isOracle = [ConnectionMode.OB_ORACLE, ConnectionMode.ORACLE].includes(
+      session?.connection?.dialectType,
+    );
+    const lastSegment = removeTableQuote((rawName || '').trim().split('.').pop());
+    const realTableName = getRealNameInDatabase(lastSegment, isOracle);
+    return /[\w]+/.test(realTableName) && realTableName?.length < 500 ? realTableName : '';
+  };
+
+  /**
+   * 异步校验表名：identities 未加载时先 await queryIdentities(带 15s 节流)，
+   * 命中当前库的表时返回归一化名，否则返回空串。
+   */
+  private resolveTableName = async (rawName: string): Promise<string> => {
+    const session = this.getSession();
+    const dbName = session?.database?.dbName;
+    if (!session?.sessionId || !dbName) {
+      return '';
+    }
+    const getDb = () =>
+      session.allIdentities[dbName] || session.allIdentities[dbName?.toUpperCase()];
+    const db = getDb();
+    if (!db?.tables?.length && !db?.views?.length) {
+      await session.queryIdentities();
+    }
+    const realTableName = this.normalizeTableName(rawName);
+    return getDb()?.tables?.includes(realTableName) ? realTableName : '';
+  };
+
+  /**
+   * 同步快路径，仅依赖已加载的 identities 判定（Ctrl+点击需要同步抢占默认行为）。
+   * 未加载时后台触发 queryIdentities，本次返回空串，下一次点击即可命中。
+   */
+  private getLoadedTableName = (rawName: string): string => {
+    const session = this.getSession();
+    const dbName = session?.database?.dbName;
+    const db = session?.allIdentities?.[dbName] || session?.allIdentities?.[dbName?.toUpperCase()];
+    if (!db?.tables?.length && !db?.views?.length) {
+      session?.queryIdentities();
+      return '';
+    }
+    const realTableName = this.normalizeTableName(rawName);
+    return db.tables?.includes(realTableName) ? realTableName : '';
+  };
+
+  /** 打开表"结构-列"页面，与对象树"查看列"菜单同参（同表同库去重，已打开也会切到列页） */
+  private openTableColumnsPage = (tableName: string) => {
+    const databaseId = this.getSession()?.odcDatabase?.id;
+    if (tableName && databaseId) {
+      openTableViewPage(tableName, TopTab.PROPS, PropsTab.COLUMN, databaseId);
+    }
+  };
+
+  /**
+   * Ctrl/⌘ + 点击表名跳转。必须在命中表名时同步 preventDefault/stopPropagation，
+   * 否则 Ctrl+Click 的默认行为（添加多光标）会先于异步判定生效；
+   * 未命中时不拦截，保持多光标等编辑行为不变。
+   */
+  public bindTableStructureLink = () => {
+    this.tableLinkListener?.dispose();
+    this.tableLinkListener = this.editor.onMouseDown((e) => {
+      if (!(e.event.ctrlKey || e.event.metaKey) || !e.event.leftButton) {
+        return;
+      }
+      const position = e.target?.position;
+      if (!position) {
+        return;
+      }
+      const word = this.editor.getModel()?.getWordAtPosition(position)?.word;
+      if (!word) {
+        return;
+      }
+      const tableName = this.getLoadedTableName(word);
+      if (tableName) {
+        e.event.preventDefault();
+        e.event.stopPropagation();
+        this.openTableColumnsPage(tableName);
+      }
+    });
+  };
+
+  /** 右键菜单"查看表结构"：优先取选中文本，否则取光标处单词 */
+  public handleViewTableStructure = async () => {
+    const model = this.editor.getModel();
+    const selection = this.editor.getSelection();
+    let rawName = '';
+    if (selection && !selection.isEmpty()) {
+      rawName = model.getValueInRange(selection);
+    } else {
+      const position = this.editor.getPosition();
+      rawName = position ? model.getWordAtPosition(position)?.word : '';
+    }
+    rawName = rawName?.trim();
+    if (!rawName) {
+      message.warning(
+        formatMessage({
+          id: 'odc.page.Workspace.components.SQLPage.SelectTableNameFirst',
+          defaultMessage: '请先选中一个表名',
+        }),
+      );
+      return;
+    }
+    const tableName = await this.resolveTableName(rawName);
+    if (!tableName) {
+      message.warning(
+        formatMessage(
+          {
+            id: 'odc.page.Workspace.components.SQLPage.NotATableInCurrentDatabase',
+            defaultMessage: '当前数据库中不存在表 {name}，无法查看表结构',
+          },
+          { name: rawName },
+        ),
+      );
+      return;
+    }
+    this.openTableColumnsPage(tableName);
   };
 
   public handleSQLChanged = (sql: string) => {
