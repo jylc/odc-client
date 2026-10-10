@@ -85,7 +85,9 @@ FIX_MARK2="$(grep -c flattenFromTables "$DEST/dist/model/dialect/obmysql.js" 2>/
 echo "    JOIN 别名修复标记 flattenFromTables：${FIX_MARK2:-0} 处（应 ≥1）"
 FIX_MARK3="$(grep -c 'left|right|full' "$DEST/worker-dist/obmysql.js" 2>/dev/null || true)"
 echo "    LEFT JOIN 补全修复标记 left|right|full：${FIX_MARK3:-0} 处（应 ≥1）"
-[[ "${FIX_MARK:-0}" -ge 1 && "${FIX_MARK2:-0}" -ge 1 && "${FIX_MARK3:-0}" -ge 1 ]] || die "安装内容不是最新构建产物，请在联网机重新打包"
+FIX_MARK4="$(grep -c isDmlTargetTablePosition "$DEST/dist/obmysql/worker/parser.js" 2>/dev/null || true)"
+echo "    DML 目标表补全修复标记 isDmlTargetTablePosition：${FIX_MARK4:-0} 处（应 ≥1）"
+[[ "${FIX_MARK:-0}" -ge 1 && "${FIX_MARK2:-0}" -ge 1 && "${FIX_MARK3:-0}" -ge 1 && "${FIX_MARK4:-0}" -ge 1 ]] || die "安装内容不是最新构建产物，请在联网机重新打包"
 ls "$DEST/worker-dist" | sed 's/^/    worker-dist: /'
 
 echo
