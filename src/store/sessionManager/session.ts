@@ -218,6 +218,8 @@ class SessionStore {
       if (!this.database) {
         return;
       }
+      // 会话建立后立即预热库表清单，避免编辑器首次补全因竞态拿不到表名
+      this.queryIdentities(true).catch(() => {});
       await this.initSessionStatus(true);
       if (!this.transState) {
         return false;
@@ -449,15 +451,15 @@ class SessionStore {
   }
 
   @action
-  public async queryIdentities() {
+  public async queryIdentities(force = false) {
     const now = Date.now();
-    if (now - this.lastIdentitiesLoadTime < 15000) {
+    if (now - this.lastIdentitiesLoadTime < 15000 && !force) {
       return;
     }
     this.lastIdentitiesLoadTime = now;
     const data = await queryIdentities(['TABLE', 'VIEW'], this.sessionId, this.database?.dbName);
     if (!data) {
-      this.lastTableAndViewLoadTime = 0;
+      this.lastIdentitiesLoadTime = 0;
     }
     runInAction(() => {
       data?.forEach((item) => {
