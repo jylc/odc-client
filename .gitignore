@@ -33,4 +33,4 @@ yarn.lock
 # 本地产物：离线依赖/本地服务/本地工具库，不入库
 offline-deps/
 tab_services/
-libraries/others/
+libraries/others/monaco-plugin-ob-offline-*.tar.gz
