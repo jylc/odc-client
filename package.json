@@ -178,10 +178,5 @@
       "customDir": "v22.3.27"
     }
   },
-  "copyright": "© 2021 ANT GROUP",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron"
-    ]
-  }
+  "copyright": "© 2021 ANT GROUP"
 }

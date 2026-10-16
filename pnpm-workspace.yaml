@@ -1,0 +1,4 @@
+allowBuilds:
+  '@swc/core': false
+  electron: true
+  esbuild: false
