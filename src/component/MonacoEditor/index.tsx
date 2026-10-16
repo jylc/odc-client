@@ -96,6 +96,15 @@ const MonacoEditor: React.FC<IProps> = function (props) {
 
   const sessionRef = useRef<SessionStore>(sessionStore);
 
+  // 跟随最新 language props：initEditor/initPlugin 为挂载帧闭包，
+  // 会话就绪导致 language 从默认 'sql' 变为实际方言（如 'mysql'）时，
+  // 需用最新值设置模型语言与注册补全，否则旧闭包会把模型语言覆盖回 'sql'
+  const languageRef = useRef(language);
+
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
+
   const themeValue = useMemo(() => {
     if (!theme) {
       return settingTheme;
@@ -141,7 +150,7 @@ const MonacoEditor: React.FC<IProps> = function (props) {
     if (!editorRef.current?.getModel?.()) {
       return;
     }
-    const plugin = module.register(language);
+    const plugin = module.register(languageRef.current);
 
     groovy.registerGroovyLanguageForMonaco();
     plugin.setModelOptions(
@@ -185,7 +194,8 @@ const MonacoEditor: React.FC<IProps> = function (props) {
     if (!editorRef.current?.getModel?.()) {
       return;
     }
-    monaco.editor.setModelLanguage(editorRef.current.getModel(), language);
+    // 用最新 language（会话就绪后可能已从 'sql' 变为实际方言），避免旧闭包覆盖模型语言
+    monaco.editor.setModelLanguage(editorRef.current.getModel(), languageRef.current);
     editorRef.current.onDidChangeModelContent((e) => {
       /**
        * editor value change
